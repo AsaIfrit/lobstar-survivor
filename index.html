@@ -180,7 +180,27 @@
     <div id="startScreen" class="overlay">
         <h1>Lobstar-survivor</h1>
         <p>運用元素精靈的力量，在無盡的魔物浪潮中生存下去！<br>使用 <b>WASD / 方向鍵</b> 移動，按下 <b>ESC</b> 暫停遊戲。</p>
-        <button class="btn" onclick="startGame()">開始冒險</button>
+        <button class="btn" onclick="showSkillSelect()">開始冒險</button>
+    </div>
+
+    <!-- 初始技能選擇畫面 -->
+    <div id="skillSelectScreen" class="overlay hidden">
+        <h1>選擇初始技能</h1>
+        <p>請挑選一項你要帶入戰場的核心武器：</p>
+        <div class="upgrade-grid">
+            <div class="upgrade-card" onclick="startWithSkill('fireball')">
+                <h3>烈焰球</h3>
+                <p>射出火球攻擊敵人，並附加「燃燒」持續傷害狀態。</p>
+            </div>
+            <div class="upgrade-card" onclick="startWithSkill('blade')">
+                <h3>防護水環</h3>
+                <p>環繞身周旋轉水球，附加「潮濕」減速狀態，可與火系觸發蒸發。</p>
+            </div>
+            <div class="upgrade-card" onclick="startWithSkill('lightning')">
+                <h3>閃電鏈</h3>
+                <p>釋放鋸齒閃電攻擊多重敵人，可與燃燒觸發「超載」、與潮濕觸發「感電」。</p>
+            </div>
+        </div>
     </div>
 
     <!-- 暫停畫面 -->
@@ -208,16 +228,13 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // 載入 HIT.mp3 音效
         const hitSound = new Audio('HIT.mp3');
         hitSound.volume = 0.6;
 
         function playHitSound() {
             try {
                 hitSound.currentTime = 0;
-                hitSound.play().catch(e => {
-                    // 瀏覽器自動播放政策攔截時略過
-                });
+                hitSound.play().catch(e => {});
             } catch (err) {}
         }
 
@@ -254,6 +271,7 @@
         let gamePaused = false;
         let gameTime = 0;
         let killCount = 0;
+        let chosenInitialSkill = 'fireball';
 
         let player = {
             worldX: 0,
@@ -279,7 +297,7 @@
         };
 
         let weapons = [
-            { id: 'fireball', name: '烈焰球', level: 1, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
+            { id: 'fireball', name: '烈焰球', level: 0, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
             { id: 'lightning', name: '閃電鏈', level: 0, maxLevel: 5, cd: 2.0, timer: 0, damage: 40, range: 300 },
             { id: 'blade', name: '防護水環', level: 0, maxLevel: 5, cd: 0.3, timer: 0, damage: 12, range: 120 }
         ];
@@ -344,8 +362,18 @@
             }
         });
 
-        function startGame() {
+        function showSkillSelect() {
             document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('skillSelectScreen').classList.remove('hidden');
+        }
+
+        function startWithSkill(skillId) {
+            chosenInitialSkill = skillId;
+            document.getElementById('skillSelectScreen').classList.add('hidden');
+            startGame();
+        }
+
+        function startGame() {
             resetGame();
             gameRunning = true;
             requestAnimationFrame(gameLoop);
@@ -353,9 +381,7 @@
 
         function restartGame() {
             document.getElementById('gameOverScreen').classList.add('hidden');
-            resetGame();
-            gameRunning = true;
-            requestAnimationFrame(gameLoop);
+            showSkillSelect();
         }
 
         function resetGame() {
@@ -385,7 +411,7 @@
             floatTexts = [];
 
             weapons.forEach(w => {
-                w.level = (w.id === 'fireball' ? 1 : 0);
+                w.level = (w.id === chosenInitialSkill ? 1 : 0);
                 w.timer = 0;
             });
             passives.forEach(p => p.level = 0);
@@ -512,7 +538,7 @@
                 }
             });
 
-            // 防護水環攻擊與蒸發反應判定
+            // 防護水環攻擊、附加「潮濕」狀態與蒸發反應判定
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -537,7 +563,11 @@
                         if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
-                                playHitSound(); // 播放打擊音效[cite: 1]
+                                playHitSound();
+
+                                // 賦予潮濕狀態 (持續 3 秒)
+                                let wasWet = e.wetTimer > 0;
+                                e.wetTimer = 3.0;
 
                                 let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                                 let baseDmg = (bladeW.damage + bladeW.level * 4) * powerBonus;
@@ -598,7 +628,7 @@
                 checkEnemyDeaths();
             }
 
-            // 敵人更新與燃燒火星飄散
+            // 敵人更新、燃燒、潮濕減速與定身控制
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
 
@@ -620,7 +650,7 @@
 
                     if (e.burnTickTimer >= 1.0) {
                         e.burnTickTimer = 0;
-                        playHitSound(); // 燃燒扣血播放打擊音效[cite: 1]
+                        playHitSound();
                         let burnDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
                         e.hp -= burnDmg;
 
@@ -639,7 +669,23 @@
                     }
                 }
 
+                if (e.wetTimer > 0) {
+                    e.wetTimer -= dt;
+                }
+
+                if (e.stunTimer > 0) {
+                    e.stunTimer -= dt;
+                }
+
+                // 若處於感電定身狀態，則不移動
+                if (e.stunTimer > 0) {
+                    e.visualHeight = 0;
+                    continue;
+                }
+
                 let angle = Math.atan2(player.worldY - e.y, player.worldX - e.x);
+                // 潮濕狀態移動速度降低 20%
+                let currentEnemySpeed = e.speed * (e.wetTimer > 0 ? 0.8 : 1.0);
 
                 if (e.isJumper) {
                     e.jumpTimer += dt;
@@ -651,8 +697,8 @@
 
                     if (e.isJumping) {
                         e.jumpProgress += dt * 3;
-                        e.x += Math.cos(angle) * e.speed * 2.2;
-                        e.y += Math.sin(angle) * e.speed * 2.2;
+                        e.x += Math.cos(angle) * currentEnemySpeed * 2.2;
+                        e.y += Math.sin(angle) * currentEnemySpeed * 2.2;
                         e.visualHeight = Math.sin(e.jumpProgress * Math.PI) * 18;
 
                         if (e.jumpProgress >= 1.0) {
@@ -661,19 +707,19 @@
                         }
                     } else {
                         e.visualHeight = 0;
-                        e.x += Math.cos(angle) * e.speed * 0.3;
-                        e.y += Math.sin(angle) * e.speed * 0.3;
+                        e.x += Math.cos(angle) * currentEnemySpeed * 0.3;
+                        e.y += Math.sin(angle) * currentEnemySpeed * 0.3;
                     }
                 } else {
                     e.visualHeight = 0;
-                    e.x += Math.cos(angle) * e.speed;
-                    e.y += Math.sin(angle) * e.speed;
+                    e.x += Math.cos(angle) * currentEnemySpeed;
+                    e.y += Math.sin(angle) * currentEnemySpeed;
                 }
 
                 let distToPlayer = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                 if (distToPlayer < player.radius + e.radius) {
                     if (player.invincibleTimer <= 0) {
-                        playHitSound(); // 主角受傷播放打擊音效[cite: 1]
+                        playHitSound();
                         let damageTaken = Math.ceil(e.damage * 0.8);
                         player.hp -= damageTaken;
                         player.invincibleTimer = 0.5;
@@ -702,7 +748,7 @@
                 }
             }
 
-            // 子彈更新
+            // 子彈更新（烈焰球擊中潮濕敵人也能觸發蒸發）
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -724,31 +770,63 @@
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     let e = enemies[j];
                     if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
-                        playHitSound(); // 敵人被子彈擊中播放打擊音效[cite: 1]
+                        playHitSound();
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor(b.damage * powerBonus);
-                        e.hp -= finalDmg;
 
                         if (b.id === 'fireball') {
-                            let wasBurning = e.burnTimer > 0;
-                            e.burnTimer = 2.0;
-                            e.burnTickTimer = 0;
+                            // 若烈焰球擊中「潮濕」狀態的敵人，同樣觸發蒸發！
+                            if (e.wetTimer > 0) {
+                                e.wetTimer = 0;
+                                finalDmg *= 2;
 
-                            if (!wasBurning) {
-                                let outAngle = (Math.random() - 0.5) * Math.PI;
+                                for (let s = 0; s < 12; s++) {
+                                    particles.push({
+                                        type: 'smoke',
+                                        worldX: e.x,
+                                        worldY: e.y,
+                                        vx: (Math.random() - 0.5) * 3,
+                                        vy: (Math.random() - 0.5) * 3,
+                                        life: 0.5,
+                                        color: '#ffffff'
+                                    });
+                                }
+
+                                let outAngle = Math.atan2(e.y - b.y, e.x - b.x) + (Math.random() - 0.5) * 0.5;
                                 floatTexts.push({
                                     worldX: e.x,
                                     worldY: e.y - 15,
-                                    vx: Math.cos(outAngle) * 1.2,
-                                    vy: -2.5,
+                                    vx: Math.cos(outAngle) * 1.5,
+                                    vy: -2.8,
                                     gravity: 0.15,
-                                    text: '燃燒',
-                                    color: '#ff7043',
+                                    text: '蒸發',
+                                    color: '#ff5722',
                                     life: 1.0,
                                     maxLife: 1.0
                                 });
+                            } else {
+                                let wasBurning = e.burnTimer > 0;
+                                e.burnTimer = 2.0;
+                                e.burnTickTimer = 0;
+
+                                if (!wasBurning) {
+                                    let outAngle = (Math.random() - 0.5) * Math.PI;
+                                    floatTexts.push({
+                                        worldX: e.x,
+                                        worldY: e.y - 15,
+                                        vx: Math.cos(outAngle) * 1.2,
+                                        vy: -2.5,
+                                        gravity: 0.15,
+                                        text: '燃燒',
+                                        color: '#ff7043',
+                                        life: 1.0,
+                                        maxLife: 1.0
+                                    });
+                                }
                             }
                         }
+
+                        e.hp -= finalDmg;
                         
                         let outAngle = Math.atan2(e.y - b.y, e.x - b.x) + (Math.random() - 0.5) * 0.5;
                         floatTexts.push({
@@ -811,7 +889,7 @@
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
 
-            // 經驗晶體與掉落道具吸收邏輯
+            // 經驗與道具收集
             let pickupRangeBase = player.pickupRadius * (1 + passives.find(p => p.id === 'magnet').level * 0.3);
             
             for (let i = gems.length - 1; i >= 0; i--) {
@@ -922,7 +1000,9 @@
                 jumpProgress: 0,
                 visualHeight: 0,
                 burnTimer: 0,
-                burnTickTimer: 0
+                burnTickTimer: 0,
+                wetTimer: 0,
+                stunTimer: 0
             });
         }
 
@@ -971,12 +1051,70 @@
             } else if (weapon.id === 'lightning') {
                 let affectedCount = 2 + weapon.level;
                 let hitCount = 0;
+                let lastHitX = player.worldX;
+                let lastHitY = player.worldY;
+
                 enemies.forEach(e => {
                     let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                     if (hitCount < affectedCount && dist < weapon.range) {
-                        playHitSound(); // 閃電鏈命中播放打擊音效[cite: 1]
+                        playHitSound();
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor((weapon.damage + weapon.level * 10) * powerBonus);
+
+                        // 元素反應：超載 (對燃燒敵人) 或 感電 (對潮濕敵人)
+                        if (e.burnTimer > 0) {
+                            e.burnTimer = 0; // 清除燃燒
+                            finalDmg = Math.floor(finalDmg * 1.5); // 1.5倍傷害
+
+                            let outAngle = (Math.random() - 0.5) * Math.PI;
+                            floatTexts.push({
+                                worldX: e.x,
+                                worldY: e.y - 15,
+                                vx: Math.cos(outAngle) * 1.2,
+                                vy: -2.5,
+                                gravity: 0.15,
+                                text: '超載',
+                                color: '#ffca28',
+                                life: 1.0,
+                                maxLife: 1.0
+                            });
+
+                            // 對周圍敵人造成範圍傷害
+                            enemies.forEach(nearE => {
+                                if (nearE !== e && Math.hypot(e.x - nearE.x, e.y - nearE.y) < 80) {
+                                    nearE.hp -= Math.floor(finalDmg * 0.75);
+                                    let naAngle = Math.atan2(nearE.y - e.y, nearE.x - e.x);
+                                    floatTexts.push({
+                                        worldX: nearE.x,
+                                        worldY: nearE.y,
+                                        vx: Math.cos(naAngle) * 1.2,
+                                        vy: -2.2,
+                                        gravity: 0.15,
+                                        text: Math.floor(finalDmg * 0.75),
+                                        color: '#ffca28',
+                                        life: 1.0,
+                                        maxLife: 1.0
+                                    });
+                                }
+                            });
+                        } else if (e.wetTimer > 0) {
+                            e.wetTimer = 0; // 清除潮濕
+                            e.stunTimer = 0.5; // 無法移動 0.5 秒
+
+                            let outAngle = (Math.random() - 0.5) * Math.PI;
+                            floatTexts.push({
+                                worldX: e.x,
+                                worldY: e.y - 15,
+                                vx: Math.cos(outAngle) * 1.2,
+                                vy: -2.5,
+                                gravity: 0.15,
+                                text: '感電',
+                                color: '#00b0ff',
+                                life: 1.0,
+                                maxLife: 1.0
+                            });
+                        }
+
                         e.hp -= finalDmg;
                         
                         let outAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX) + (Math.random() - 0.5) * 0.5;
@@ -996,7 +1134,18 @@
                         e.x += Math.cos(kbAngle) * 18;
                         e.y += Math.sin(kbAngle) * 18;
 
-                        particles.push({ type: 'lightning', worldX1: player.worldX, worldY1: player.worldY, worldX2: e.x, worldY2: e.y, life: 0.45 });
+                        // 產生鋸齒狀閃電路徑粒子
+                        particles.push({ 
+                            type: 'lightning', 
+                            startX: lastHitX, 
+                            startY: lastHitY, 
+                            targetX: e.x, 
+                            targetY: e.y, 
+                            life: 0.45 
+                        });
+
+                        lastHitX = e.x;
+                        lastHitY = e.y;
 
                         if (e.hp <= 0) {
                             killCount++;
@@ -1107,7 +1256,7 @@
                 }
             });
 
-            // 掉落道具 (❤愛心, 🧲磁鐵)
+            // 掉落道具
             items.forEach(it => {
                 let screenX = it.x - camX;
                 let screenY = it.y - camY;
@@ -1120,7 +1269,7 @@
                 }
             });
 
-            // 敵人繪製
+            // 敵人繪製（潮濕狀態帶有藍色水滴標記，感電狀態閃爍）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -1140,6 +1289,14 @@
                     if (e.burnTimer > 0) {
                         ctx.fillStyle = '#ff3d00';
                         ctx.fillRect(screenX - size / 2 - 4, screenY - size / 2 - 8, 8, 8);
+                    }
+                    if (e.wetTimer > 0) {
+                        ctx.fillStyle = '#00b0ff';
+                        ctx.fillRect(screenX + size / 2 - 4, screenY - size / 2 - 8, 8, 8);
+                    }
+                    if (e.stunTimer > 0 && Math.floor(gameTime * 20) % 2 === 0) {
+                        ctx.fillStyle = '#ffff00';
+                        ctx.fillRect(screenX - 4, screenY - size / 2 - 14, 8, 8);
                     }
                 }
             });
@@ -1242,25 +1399,38 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
-            // 粒子特效渲染
+            // 粒子特效渲染（包含鋸齒狀閃電鏈）
             particles.forEach(p => {
-                let sx = p.worldX - camX;
-                let sy = p.worldY - camY;
                 if (p.type === 'spark') {
+                    let sx = p.worldX - camX;
+                    let sy = p.worldY - camY;
                     ctx.fillStyle = p.color;
                     ctx.fillRect(sx - 2, sy - 2, 4, 4);
                 } else if (p.type === 'smoke') {
+                    let sx = p.worldX - camX;
+                    let sy = p.worldY - camY;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                     ctx.fillRect(sx - 3, sy - 3, 6, 6);
                 } else if (p.type === 'lightning') {
-                    let sx1 = p.worldX1 - camX;
-                    let sy1 = p.worldY1 - camY;
-                    let sx2 = p.worldX2 - camX;
-                    let sy2 = p.worldY2 - camY;
+                    let sx1 = p.startX - camX;
+                    let sy1 = p.startY - camY;
+                    let sx2 = p.targetX - camX;
+                    let sy2 = p.targetY - camY;
+
                     ctx.strokeStyle = '#00ffff';
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.moveTo(sx1, sy1);
+
+                    // 產生鋸齒狀折線點 (3個轉折點)
+                    let segments = 4;
+                    for (let s = 1; s < segments; s++) {
+                        let t = s / segments;
+                        let interX = sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 18;
+                        let interY = sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 18;
+                        ctx.lineTo(interX, interY);
+                    }
+
                     ctx.lineTo(sx2, sy2);
                     ctx.stroke();
                 }
