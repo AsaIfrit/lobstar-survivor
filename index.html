@@ -618,7 +618,7 @@
                 checkEnemyDeaths();
             }
 
-            // 敵人更新、燃燒、潮濕減速與定身控制
+            // 敵人更新、燃燒、潮濕減速、定身控制與被炸飛跳躍處理
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
 
@@ -647,12 +647,21 @@
                     }
                 }
 
-                if (e.wetTimer > 0) {
-                    e.wetTimer -= dt;
-                }
+                if (e.wetTimer > 0) e.wetTimer -= dt;
+                if (e.stunTimer > 0) e.stunTimer -= dt;
 
-                if (e.stunTimer > 0) {
-                    e.stunTimer -= dt;
+                // 超載炸飛時的跳躍位移更新
+                if (e.isKnockbackJumping) {
+                    e.knockbackJumpProgress += dt * 3.5; // 調整跳躍滯空速度
+                    e.x += e.knockbackVx;
+                    e.y += e.knockbackVy;
+                    e.visualHeight = Math.sin(e.knockbackJumpProgress * Math.PI) * 32; // 彈跳高度
+
+                    if (e.knockbackJumpProgress >= 1.0) {
+                        e.isKnockbackJumping = false;
+                        e.visualHeight = 0;
+                    }
+                    continue;
                 }
 
                 if (e.stunTimer > 0) {
@@ -829,9 +838,12 @@
             // 粒子更新
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                if (p.type === 'spark' || p.type === 'smoke' || p.type === 'pixelExplosion') {
-                    p.worldX += p.vx;
-                    p.worldY += p.vy;
+                if (p.type === 'spark' || p.type === 'smoke' || p.type === 'pixelExplosion' || p.type === 'shockwaveRing') {
+                    p.worldX += p.vx || 0;
+                    p.worldY += p.vy || 0;
+                    if (p.type === 'shockwaveRing') {
+                        p.radius += p.expandSpeed;
+                    }
                     p.life -= dt;
                     if (p.life <= 0) particles.splice(i, 1);
                 } else if (p.type === 'lightning') {
@@ -963,7 +975,11 @@
                 burnTimer: 0,
                 burnTickTimer: 0,
                 wetTimer: 0,
-                stunTimer: 0
+                stunTimer: 0,
+                isKnockbackJumping: false,
+                knockbackJumpProgress: 0,
+                knockbackVx: 0,
+                knockbackVy: 0
             });
         }
 
@@ -1039,36 +1055,65 @@
                                 maxLife: 1.0
                             });
 
-                            for (let p = 0; p < 16; p++) {
+                            // --- 超載強力爆炸與衝擊波特效 ---
+                            for (let p = 0; p < 28; p++) {
                                 let pAngle = Math.random() * Math.PI * 2;
-                                let pSpeed = 1 + Math.random() * 3;
+                                let pSpeed = 1.5 + Math.random() * 4.5;
                                 particles.push({
                                     type: 'pixelExplosion',
                                     worldX: e.x,
                                     worldY: e.y,
                                     vx: Math.cos(pAngle) * pSpeed,
                                     vy: Math.sin(pAngle) * pSpeed,
-                                    life: 0.4,
-                                    color: Math.random() > 0.5 ? '#ff9800' : '#ffeb3b',
-                                    size: 4 + Math.floor(Math.random() * 4)
+                                    life: 0.5,
+                                    color: Math.random() > 0.4 ? '#ff5722' : (Math.random() > 0.5 ? '#ffeb3b' : '#ffffff'),
+                                    size: 5 + Math.floor(Math.random() * 5)
                                 });
                             }
 
+                            // 擴散衝擊波圓環
+                            particles.push({
+                                type: 'shockwaveRing',
+                                worldX: e.x,
+                                worldY: e.y,
+                                radius: 10,
+                                expandSpeed: 6.0,
+                                life: 0.35,
+                                color: '#ffca28'
+                            });
+
+                            // 周圍敵人以觸發超載的敵人為圓心向外炸飛（帶有跳躍拋物線表現）
+                            let overloadRadius = 100;
                             enemies.forEach(nearE => {
-                                if (nearE !== e && Math.hypot(e.x - nearE.x, e.y - nearE.y) < 80) {
-                                    nearE.hp -= Math.floor(finalDmg * 0.75);
-                                    let naAngle = Math.atan2(nearE.y - e.y, nearE.x - e.x);
-                                    floatTexts.push({
-                                        worldX: nearE.x,
-                                        worldY: nearE.y,
-                                        vx: Math.cos(naAngle) * 1.2,
-                                        vy: -2.2,
-                                        gravity: 0.15,
-                                        text: Math.floor(finalDmg * 0.75),
-                                        color: '#ffca28',
-                                        life: 1.0,
-                                        maxLife: 1.0
-                                    });
+                                let distToTrigger = Math.hypot(e.x - nearE.x, e.y - nearE.y);
+                                if (distToTrigger < overloadRadius) {
+                                    if (nearE !== e) {
+                                        nearE.hp -= Math.floor(finalDmg * 0.75);
+                                    }
+
+                                    // 計算向外炸飛方向與距離
+                                    let flyAngle = Math.atan2(nearE.y - e.y, nearE.x - e.x);
+                                    let flySpeed = 4.5 + Math.random() * 2.5; // 炸飛速度
+
+                                    nearE.isKnockbackJumping = true;
+                                    nearE.knockbackJumpProgress = 0;
+                                    nearE.knockbackVx = Math.cos(flyAngle) * flySpeed;
+                                    nearE.knockbackVy = Math.sin(flyAngle) * flySpeed;
+
+                                    if (nearE !== e) {
+                                        let naAngle = Math.atan2(nearE.y - e.y, nearE.x - e.x);
+                                        floatTexts.push({
+                                            worldX: nearE.x,
+                                            worldY: nearE.y,
+                                            vx: Math.cos(naAngle) * 1.2,
+                                            vy: -2.2,
+                                            gravity: 0.15,
+                                            text: Math.floor(finalDmg * 0.75),
+                                            color: '#ffca28',
+                                            life: 1.0,
+                                            maxLife: 1.0
+                                        });
+                                    }
                                 }
                             });
                         } else if (e.wetTimer > 0) {
@@ -1232,12 +1277,11 @@
                 }
             });
 
-            // 敵人渲染（影子向下偏移，讓一半超出方塊外）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
                 if (screenX >= -50 && screenX <= scaledWidth + 50 && screenY >= -50 && screenY <= scaledHeight + 50) {
-                    // 陰影位置往下偏移，讓上半部與方塊底部重疊、下半部突出
+                    // 影子保持在地面上（不隨 visualHeight 浮空），呈現立體感
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
                     ctx.beginPath();
                     ctx.ellipse(e.x - camX, (e.y - camY) + e.radius * 0.5, e.radius * 0.8, e.radius * 0.35, 0, 0, Math.PI * 2);
@@ -1280,7 +1324,6 @@
             let playerScreenX = scaledWidth / 2;
             let playerScreenY = scaledHeight / 2;
 
-            // 主角影子向下偏移，讓一半露出在方塊外
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             ctx.beginPath();
             ctx.ellipse(playerScreenX, playerScreenY + player.radius * 0.9, player.radius * 0.85, player.radius * 0.35, 0, 0, Math.PI * 2);
@@ -1362,6 +1405,7 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
+            // 粒子特效渲染（含超載衝擊波圓環與像素爆炸）
             particles.forEach(p => {
                 if (p.type === 'spark') {
                     let sx = p.worldX - camX;
@@ -1378,6 +1422,14 @@
                     let sy = p.worldY - camY;
                     ctx.fillStyle = p.color;
                     ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
+                } else if (p.type === 'shockwaveRing') {
+                    let sx = p.worldX - camX;
+                    let sy = p.worldY - camY;
+                    ctx.strokeStyle = p.color;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, p.radius, 0, Math.PI * 2);
+                    ctx.stroke();
                 } else if (p.type === 'lightning') {
                     let sx1 = p.startX - camX;
                     let sy1 = p.startY - camY;
