@@ -208,6 +208,19 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
+        // 載入 HIT.mp3 音效
+        const hitSound = new Audio('HIT.mp3');
+        hitSound.volume = 0.6;
+
+        function playHitSound() {
+            try {
+                hitSound.currentTime = 0;
+                hitSound.play().catch(e => {
+                    // 瀏覽器自動播放政策攔截時略過
+                });
+            } catch (err) {}
+        }
+
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
         const cameraZoom = isMobile ? 1.0 : 2.0;
 
@@ -524,6 +537,8 @@
                         if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
+                                playHitSound(); // 播放打擊音效[cite: 1]
+
                                 let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                                 let baseDmg = (bladeW.damage + bladeW.level * 4) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
@@ -605,6 +620,7 @@
 
                     if (e.burnTickTimer >= 1.0) {
                         e.burnTickTimer = 0;
+                        playHitSound(); // 燃燒扣血播放打擊音效[cite: 1]
                         let burnDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
                         e.hp -= burnDmg;
 
@@ -657,6 +673,7 @@
                 let distToPlayer = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                 if (distToPlayer < player.radius + e.radius) {
                     if (player.invincibleTimer <= 0) {
+                        playHitSound(); // 主角受傷播放打擊音效[cite: 1]
                         let damageTaken = Math.ceil(e.damage * 0.8);
                         player.hp -= damageTaken;
                         player.invincibleTimer = 0.5;
@@ -707,6 +724,7 @@
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     let e = enemies[j];
                     if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                        playHitSound(); // 敵人被子彈擊中播放打擊音效[cite: 1]
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor(b.damage * powerBonus);
                         e.hp -= finalDmg;
@@ -840,7 +858,6 @@
         function handleEnemyDeath(e) {
             gems.push({ x: e.x, y: e.y, value: e.expVal });
 
-            // 5% 機率掉落道具 (僅保留 ❤愛心 與 🧲磁鐵，已移除炸彈)
             if (Math.random() < 0.05) {
                 let type = Math.random() < 0.5 ? 'heart' : 'magnet';
                 items.push({ x: e.x, y: e.y, type: type });
@@ -871,7 +888,6 @@
             let isEarlyGame = gameTime < 120;
             let earlyMult = isEarlyGame ? 0.35 : 0.7;
 
-            // 所有敵人血量提升為 2 倍 (乘以 2.0)
             if (typeRand < 0.6) {
                 hp = (20 + gameTime * 0.8) * earlyMult * 2.0;
                 speed = 1.0 * (isEarlyGame ? 0.8 : 1.0);
@@ -958,6 +974,7 @@
                 enemies.forEach(e => {
                     let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                     if (hitCount < affectedCount && dist < weapon.range) {
+                        playHitSound(); // 閃電鏈命中播放打擊音效[cite: 1]
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor((weapon.damage + weapon.level * 10) * powerBonus);
                         e.hp -= finalDmg;
