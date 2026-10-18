@@ -532,8 +532,12 @@
 
             weapons.forEach(weapon => {
                 if (weapon.level <= 0) return;
-                // 如果畫面中沒有敵人，則不發動烈焰球與閃電鏈
-                if ((weapon.id === 'fireball' || weapon.id === 'lightning') && enemies.length === 0) return;
+                if (enemies.length === 0) return;
+
+                if (weapon.id === 'lightning') {
+                    let hasEnemyInRange = enemies.some(e => Math.hypot(player.worldX - e.x, player.worldY - e.y) <= weapon.range);
+                    if (!hasEnemyInRange) return;
+                }
 
                 weapon.timer += dt;
                 if (weapon.timer >= weapon.cd) {
@@ -1035,7 +1039,6 @@
                                 maxLife: 1.0
                             });
 
-                            // 產生像素風爆炸粒子特效
                             for (let p = 0; p < 16; p++) {
                                 let pAngle = Math.random() * Math.PI * 2;
                                 let pSpeed = 1 + Math.random() * 3;
@@ -1229,14 +1232,15 @@
                 }
             });
 
-            // 敵人繪製（含像素風潮濕水滴、感電電流特效）
+            // 敵人渲染（影子向下偏移，讓一半超出方塊外）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
                 if (screenX >= -50 && screenX <= scaledWidth + 50 && screenY >= -50 && screenY <= scaledHeight + 50) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    // 陰影位置往下偏移，讓上半部與方塊底部重疊、下半部突出
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
                     ctx.beginPath();
-                    ctx.ellipse(e.x - camX, e.y - camY, e.radius * 0.8, e.radius * 0.4, 0, 0, Math.PI * 2);
+                    ctx.ellipse(e.x - camX, (e.y - camY) + e.radius * 0.5, e.radius * 0.8, e.radius * 0.35, 0, 0, Math.PI * 2);
                     ctx.fill();
 
                     let size = e.radius * 1.8;
@@ -1251,19 +1255,15 @@
                         ctx.fillRect(screenX - size / 2 - 4, screenY - size / 2 - 8, 8, 8);
                     }
 
-                    // 像素風潮濕水滴特效
                     if (e.wetTimer > 0) {
                         ctx.fillStyle = '#00b0ff';
                         let dropOffset = Math.sin(gameTime * 10) * 3;
-                        // 畫像素水滴方塊
                         ctx.fillRect(screenX + size / 2 - 6, screenY - size / 2 - 12 + dropOffset, 4, 6);
                         ctx.fillRect(screenX + size / 2 - 5, screenY - size / 2 - 14 + dropOffset, 2, 2);
                     }
 
-                    // 像素風感電電流特效
                     if (e.stunTimer > 0) {
                         ctx.fillStyle = '#00ffff';
-                        // 畫像素交叉閃電閃爍
                         let sparkTick = Math.floor(gameTime * 30) % 2;
                         if (sparkTick === 0) {
                             ctx.fillRect(screenX - 8, screenY - 6, 4, 4);
@@ -1280,9 +1280,10 @@
             let playerScreenX = scaledWidth / 2;
             let playerScreenY = scaledHeight / 2;
 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            // 主角影子向下偏移，讓一半露出在方塊外
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             ctx.beginPath();
-            ctx.ellipse(playerScreenX, playerScreenY + player.radius * 0.5, player.radius * 0.9, player.radius * 0.45, 0, 0, Math.PI * 2);
+            ctx.ellipse(playerScreenX, playerScreenY + player.radius * 0.9, player.radius * 0.85, player.radius * 0.35, 0, 0, Math.PI * 2);
             ctx.fill();
 
             let shouldDrawPlayer = true;
@@ -1361,7 +1362,6 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
-            // 粒子特效渲染（含像素風超載爆炸、像素脈衝閃電鏈）
             particles.forEach(p => {
                 if (p.type === 'spark') {
                     let sx = p.worldX - camX;
@@ -1384,7 +1384,6 @@
                     let sx2 = p.targetX - camX;
                     let sy2 = p.targetY - camY;
 
-                    // 復古像素風格的鋸齒粗線閃電
                     ctx.strokeStyle = '#00ffff';
                     ctx.lineWidth = 4;
                     ctx.beginPath();
@@ -1401,7 +1400,6 @@
                     ctx.lineTo(Math.round(sx2), Math.round(sy2));
                     ctx.stroke();
 
-                    // 內部白色核心高光像素線條
                     ctx.strokeStyle = '#ffffff';
                     ctx.lineWidth = 2;
                     ctx.stroke();
