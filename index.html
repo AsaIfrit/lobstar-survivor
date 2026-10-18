@@ -22,7 +22,7 @@
         canvas {
             display: block;
             background: #1a1a2e;
-            image-rendering: pixelated; /* 保持像素風格清晰 */
+            image-rendering: pixelated; /* 保持像素銳利不模糊 */
         }
         #ui-layer {
             position: absolute;
@@ -204,20 +204,20 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            ctx.imageSmoothingEnabled = false; // 保持像素圖片銳利不模糊
+            ctx.imageSmoothingEnabled = false;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // 載入角色待機動畫圖片
+        // 載入主角圖片 (待機 2 張 + 攻擊 1 張)
         const playerIdleImages = [];
-        let imagesLoaded = 0;
-        const imgSources = ['Front_idle_01.png', 'Front_idle_02.png'];
+        const playerAtkImage = new Image();
+        playerAtkImage.src = 'Front_atk.png';
 
+        const imgSources = ['Front_idle_01.png', 'Front_idle_02.png'];
         imgSources.forEach((src, index) => {
             const img = new Image();
             img.src = src;
-            img.onload = () => { imagesLoaded++; };
             playerIdleImages[index] = img;
         });
 
@@ -227,11 +227,11 @@
         let killCount = 0;
         let lastTime = 0;
 
-        // 玩家物件（世界座標）
+        // 玩家物件（世界座標與動畫狀態）
         let player = {
             worldX: 0,
             worldY: 0,
-            radius: 20, // 稍微加大判定半徑以配合精靈圖
+            radius: 20,
             speed: 2.3,
             maxHp: 100,
             hp: 100,
@@ -239,14 +239,17 @@
             exp: 0,
             maxExp: 20,
             pickupRadius: 80,
-            animTimer: 0,      // 動畫累積時間
-            currentFrame: 0   // 當前動畫幀 (0 或 1)
+            animTimer: 0,
+            currentFrame: 0,
+            facingRight: false, // 移動方向 (false: 朝左, true: 朝右)
+            isAttacking: false, // 是否處於攻擊狀態
+            atkTimer: 0         // 攻擊動畫持續時間
         };
 
         let weapons = [
             { id: 'fireball', name: '烈焰球', level: 1, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
             { id: 'lightning', name: '閃電鏈', level: 0, maxLevel: 5, cd: 2.0, timer: 0, damage: 40, range: 300 },
-            { id: 'blade', name: '旋風劍刃', level: 0, maxLevel: 5, cd: 3.5, timer: 0, damage: 15, range: 120 }
+            { id: 'blade', name: '旋風劍刃', level: 0, maxLevel: 5, cd: 0.3, timer: 0, damage: 12, range: 120 }
         ];
 
         let passives = [
@@ -315,6 +318,9 @@
             player.maxExp = 20;
             player.animTimer = 0;
             player.currentFrame = 0;
+            player.facingRight = false;
+            player.isAttacking = false;
+            player.atkTimer = 0;
             gameTime = 0;
             killCount = 0;
             enemies = [];
@@ -362,7 +368,15 @@
                 updateHUD();
             }
 
-            // 更新角色待機動畫計時器（每 0.5 秒切換一次）
+            // 更新攻擊狀態倒數 (攻擊動作持續 0.25 秒)
+            if (player.isAttacking) {
+                player.atkTimer -= dt;
+                if (player.atkTimer <= 0) {
+                    player.isAttacking = false;
+                }
+            }
+
+            // 待機動畫每 0.5 秒切換
             player.animTimer += dt;
             if (player.animTimer >= 0.5) {
                 player.animTimer = 0;
@@ -387,6 +401,10 @@
                 }
             }
 
+            // 判斷角色左右朝向
+            if (moveX > 0) player.facingRight = true;
+            if (moveX < 0) player.facingRight = false;
+
             if (moveX !== 0 && moveY !== 0) {
                 moveX *= 0.7071;
                 moveY *= 0.7071;
@@ -396,12 +414,13 @@
             player.worldX += moveX * currentSpeed;
             player.worldY += moveY * currentSpeed;
 
-            // 生成敵人 (前2分鐘難度調降)
+            // 生成敵人 (前2分鐘難度降)
             let spawnRate = gameTime < 120 ? 0.015 : (0.03 + gameTime * 0.001);
             if (Math.random() < spawnRate) {
                 spawnEnemy();
             }
 
+            // 武器冷卻更新
             weapons.forEach(weapon => {
                 if (weapon.level <= 0) return;
                 weapon.timer += dt;
@@ -410,6 +429,37 @@
                     activateWeapon(weapon);
                 }
             });
+
+            // 旋風劍刃：持續區域碰撞傷害判定（修復無法造成傷害問題）
+            let bladeW = weapons.find(w => w.id === 'blade');
+            if (bladeW && bladeW.level > 0) {
+                let bladeCount = 2 + bladeW.level;
+                for (let i = 0; i < bladeCount; i++) {
+                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
+                    let bx = player.worldX + Math.cos(angle) * 60;
+                    let by = player.worldY + Math.sin(angle) * 60;
+
+                    enemies.forEach(e => {
+                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + 12) {
+                            if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
+                                e.lastBladeHit = gameTime;
+                                let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
+                                let finalDmg = Math.floor((bladeW.damage + bladeW.level * 4) * powerBonus);
+                                e.hp -= finalDmg;
+                                floatTexts.push({ worldX: e.x, worldY: e.y, text: finalDmg, color: '#b0bec5', life: 0.4 });
+                            }
+                        }
+                    });
+                }
+                // 清理死亡敵人
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    if (enemies[i].hp <= 0) {
+                        killCount++;
+                        gems.push({ x: enemies[i].x, y: enemies[i].y, value: enemies[i].expVal });
+                        enemies.splice(i, 1);
+                    }
+                }
+            }
 
             // 更新敵人
             for (let i = enemies.length - 1; i >= 0; i--) {
@@ -540,6 +590,10 @@
             if (!target && enemies.length > 0) target = enemies[0];
             if (!target) return;
 
+            // 觸發主角攻擊圖片動畫！
+            player.isAttacking = true;
+            player.atkTimer = 0.25;
+
             if (weapon.id === 'fireball') {
                 let angle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
                 let count = weapon.level >= 3 ? 2 : 1;
@@ -577,23 +631,6 @@
                         hitCount++;
                     }
                 });
-                enemies = enemies.filter(e => e.hp > 0);
-            } else if (weapon.id === 'blade') {
-                let bladeCount = 2 + weapon.level;
-                for (let i = 0; i < bladeCount; i++) {
-                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
-                    let bx = player.worldX + Math.cos(angle) * 60;
-                    let by = player.worldY + Math.sin(angle) * 60;
-                    
-                    enemies.forEach(e => {
-                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
-                            let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
-                            let finalDmg = Math.floor((weapon.damage + weapon.level * 5) * powerBonus);
-                            e.hp -= finalDmg;
-                            floatTexts.push({ worldX: e.x, worldY: e.y, text: finalDmg, color: '#b0bec5', life: 0.4 });
-                        }
-                    });
-                }
                 enemies = enemies.filter(e => e.hp > 0);
             }
         }
@@ -666,7 +703,7 @@
             let camX = player.worldX - canvas.width / 2;
             let camY = player.worldY - canvas.height / 2;
 
-            // 網格背景
+            // 背景網格
             ctx.strokeStyle = '#222244';
             ctx.lineWidth = 1;
             let gridSize = 50;
@@ -708,37 +745,44 @@
                 }
             });
 
-            // 繪製主角圖片 (待機動畫)
+            // 繪製主角圖片 (支援攻擊狀態與左右翻轉)
             let playerScreenX = canvas.width / 2;
             let playerScreenY = canvas.height / 2;
-            const currentImg = playerIdleImages[player.currentFrame];
+            
+            // 挑選當前應繪製的圖片 (攻擊狀態優先)
+            let currentImg = player.isAttacking ? playerAtkImage : playerIdleImages[player.currentFrame];
 
             if (currentImg && currentImg.complete && currentImg.naturalWidth !== 0) {
-                // 設定繪製尺寸 (可根據需求微調 48x48)
                 const renderSize = 48;
+                ctx.save();
+                ctx.translate(playerScreenX, playerScreenY);
+                
+                // 若往右移動，進行左右翻轉
+                if (player.facingRight) {
+                    ctx.scale(-1, 1);
+                }
+
                 ctx.drawImage(
                     currentImg,
-                    playerScreenX - renderSize / 2,
-                    playerScreenY - renderSize / 2,
+                    -renderSize / 2,
+                    -renderSize / 2,
                     renderSize,
                     renderSize
                 );
+                ctx.restore();
             } else {
-                // 如果圖片未載入，顯示預設綠圈
+                // 備用圓形
                 ctx.fillStyle = '#4cd137';
                 ctx.beginPath();
                 ctx.arc(playerScreenX, playerScreenY, player.radius, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
-                ctx.stroke();
             }
 
-            // 旋風劍刃
+            // 旋風劍刃繪製
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
-                ctx.fillStyle = 'rgba(176, 190, 197, 0.7)';
+                ctx.fillStyle = 'rgba(176, 190, 197, 0.8)';
                 for (let i = 0; i < bladeCount; i++) {
                     let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
                     let bx = playerScreenX + Math.cos(angle) * 60;
