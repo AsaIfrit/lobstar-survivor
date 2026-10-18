@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Element Survivor - 元素倖存者</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            background: #1a1a2e;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .hud-stats {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .exp-bar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.5);
+        }
+        .exp-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #00dbde, #fc00ff);
+            transition: width 0.2s ease;
+        }
+        /* 彈窗樣式 */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .hidden {
+            display: none !important;
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+        p {
+            font-size: 1.1rem;
+            color: #aaa;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.5;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .btn:active {
+            transform: translateY(1px);
+        }
+        /* 三選一升級卡片 */
+        .upgrade-grid {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 900px;
+            padding: 0 20px;
+        }
+        .upgrade-card {
+            background: rgba(30, 30, 50, 0.9);
+            border: 2px solid #4a4ae2;
+            border-radius: 12px;
+            padding: 20px;
+            width: 250px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .upgrade-card:hover {
+            border-color: #00dbde;
+            transform: translateY(-5px);
+            background: rgba(40, 40, 70, 0.95);
+            box-shadow: 0 10px 25px rgba(0, 219, 222, 0.3);
+        }
+        .upgrade-card h3 {
+            margin-top: 0;
+            color: #00dbde;
+        }
+        .upgrade-card p {
+            font-size: 0.95rem;
+            color: #ccc;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="exp-bar-container">
+        <div id="expBar" class="exp-bar"></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="hud-stats">
+                <div>生存時間: <span id="timeDisplay">00:00</span></div>
+                <div>擊殺數: <span id="killDisplay">0</span></div>
+            </div>
+            <div class="hud-stats" style="text-align: right;">
+                <div>等級: <span id="levelDisplay">1</span></div>
+                <div>生命值: <span id="hpDisplay">100/100</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 開始遊戲畫面 -->
+    <div id="startScreen" class="overlay">
+        <h1>Element Survivor</h1>
+        <p>運用元素精靈的力量，在無盡的魔物浪潮中生存下去！<br>使用 <b>WASD / 方向鍵</b> 移動，或在手機上使用<b>虛擬搖桿</b>滑動。</p>
+        <button class="btn" onclick="startGame()">開始冒險</button>
+    </div>
+
+    <!-- 升級三選一畫面 -->
+    <div id="upgradeScreen" class="overlay hidden">
+        <h1>升級！</h1>
+        <p>選擇一項你的強化能力：</p>
+        <div id="upgradeCards" class="upgrade-grid"></div>
+    </div>
+
+    <!-- 遊戲結束畫面 -->
+    <div id="gameOverScreen" class="overlay hidden">
+        <h1 style="background: linear-gradient(45deg, #ff416c, #ff4b2b); -webkit-background-clip: text;">遊戲結束</h1>
+        <p id="finalStats">你撐過了 00:00，擊敗了 0 隻怪物。</p>
+        <button class="btn" onclick="restartGame()">重新挑戰</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 自動調整畫布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 遊戲狀態
+        let gameRunning = false;
+        let gamePaused = false;
+        let gameTime = 0;
+        let killCount = 0;
+        let gameInterval;
+        let lastTime = 0;
+
+        // 玩家物件
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 16,
+            speed: 3.5,
+            maxHp: 100,
+            hp: 100,
+            level: 1,
+            exp: 0,
+            maxExp: 20,
+            pickupRadius: 80,
+            magnetPower: 1
+        };
+
+        // 玩家技能與被動
+        let weapons = [
+            { id: 'fireball', name: '烈焰球', level: 1, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
+            { id: 'lightning', name: '閃電鏈', level: 0, maxLevel: 5, cd: 2.0, timer: 0, damage: 40, range: 300 },
+            { id: 'blade', name: '旋風劍刃', level: 0, maxLevel: 5, cd: 3.5, timer: 0, damage: 15, range: 120 }
+        ];
+
+        let passives = [
+            { id: 'haste', name: '疾風靴', level: 0, maxLevel: 5, desc: '移動速度提升 10%' },
+            { id: 'power', name: '力量寶珠', level: 0, maxLevel: 5, desc: '攻擊傷害提升 15%' },
+            { id: 'magnet', name: '吸引磁鐵', level: 0, maxLevel: 5, desc: '經驗吸收範圍擴大 30%' }
+        ];
+
+        // 實體陣列
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let gems = [];
+        let floatTexts = [];
+
+        // 輸入控制
+        let keys = {};
+        let joystick = { active: false, id: null, startX: 0, startY: 0, x: 0, y: 0 };
+
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        // 觸控虛擬搖桿支援
+        window.addEventListener('pointerdown', e => {
+            if (!gameRunning || gamePaused) return;
+            joystick.active = true;
+            joystick.id = e.pointerId;
+            joystick.startX = e.clientX;
+            joystick.startY = e.clientY;
+            joystick.x = e.clientX;
+            joystick.y = e.clientY;
+        });
+
+        window.addEventListener('pointermove', e => {
+            if (joystick.active && e.pointerId === joystick.id) {
+                joystick.x = e.clientX;
+                joystick.y = e.clientY;
+            }
+        });
+
+        window.addEventListener('pointerup', e => {
+            if (joystick.active && e.pointerId === joystick.id) {
+                joystick.active = false;
+            }
+        });
+
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            resetGame();
+            gameRunning = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function restartGame() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            resetGame();
+            gameRunning = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            player.hp = player.maxHp;
+            player.level = 1;
+            player.exp = 0;
+            player.maxExp = 20;
+            gameTime = 0;
+            killCount = 0;
+            enemies = [];
+            bullets = [];
+            particles = [];
+            gems = [];
+            floatTexts = [];
+
+            weapons.forEach(w => {
+                w.level = (w.id === 'fireball' ? 1 : 0);
+                w.timer = 0;
+            });
+            passives.forEach(p => p.level = 0);
+            updateHUD();
+        }
+
+        function updateHUD() {
+            document.getElementById('levelDisplay').innerText = player.level;
+            document.getElementById('hpDisplay').innerText = `${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}`;
+            document.getElementById('killDisplay').innerText = killCount;
+            const minutes = String(Math.floor(gameTime / 60)).padStart(2, '0');
+            const seconds = String(Math.floor(gameTime % 60)).padStart(2, '0');
+            document.getElementById('timeDisplay').innerText = `${minutes}:${seconds}`;
+            
+            const expPercent = (player.exp / player.maxExp) * 100;
+            document.getElementById('expBar').style.width = `${expPercent}%`;
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            if (!gamePaused) {
+                update(dt);
+                render();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            gameTime += dt;
+            if (Math.floor(gameTime * 10) % 10 === 0) {
+                updateHUD();
+            }
+
+            // 玩家移動
+            let moveX = 0;
+            let moveY = 0;
+
+            if (keys['KeyW'] || keys['ArrowUp']) moveY -= 1;
+            if (keys['KeyS'] || keys['ArrowDown']) moveY += 1;
+            if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+            if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+
+            if (joystick.active) {
+                let dx = joystick.x - joystick.startX;
+                let dy = joystick.y - joystick.startY;
+                let dist = Math.hypot(dx, dy);
+                if (dist > 5) {
+                    moveX = dx / dist;
+                    moveY = dy / dist;
+                }
+            }
+
+            if (moveX !== 0 && moveY !== 0) {
+                moveX *= 0.7071;
+                moveY *= 0.7071;
+            }
+
+            let currentSpeed = player.speed * (1 + passives.find(p => p.id === 'haste').level * 0.1);
+            player.x += moveX * currentSpeed;
+            player.y += moveY * currentSpeed;
+
+            // 限制在邊界內
+            player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+            player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+            // 生成敵人 (隨著時間變難)
+            if (Math.random() < 0.03 + gameTime * 0.001) {
+                spawnEnemy();
+            }
+
+            // 武器邏輯
+            weapons.forEach(weapon => {
+                if (weapon.level <= 0) return;
+                weapon.timer += dt;
+                if (weapon.timer >= weapon.cd) {
+                    weapon.timer = 0;
+                    activateWeapon(weapon);
+                }
+            });
+
+            // 更新敵人
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                let angle = Math.atan2(player.y - e.y, player.x - e.x);
+                e.x += Math.cos(angle) * e.speed;
+                e.y += Math.sin(angle) * e.speed;
+
+                // 碰撞玩家
+                let distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
+                if (distToPlayer < player.radius + e.radius) {
+                    player.hp -= e.damage * dt;
+                    if (player.hp <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+
+            // 更新子彈
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                b.life -= dt;
+
+                // 檢查是否打中敵人
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                        let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
+                        let finalDmg = Math.floor(b.damage * powerBonus);
+                        e.hp -= finalDmg;
+                        
+                        // 浮動傷害字體
+                        floatTexts.push({ x: e.x, y: e.y, text: finalDmg, color: b.color, life: 0.6 });
+
+                        if (e.hp <= 0) {
+                            killCount++;
+                            gems.push({ x: e.x, y: e.y, value: e.expVal });
+                            enemies.splice(j, 1);
+                        }
+
+                        if (!b.pierce) {
+                            bullets.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+
+                if (b.life <= 0 && i < bullets.length) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 更新經驗晶體
+            let pickupRangeBase = player.pickupRadius * (1 + passives.find(p => p.id === 'magnet').level * 0.3);
+            for (let i = gems.length - 1; i >= 0; i--) {
+                let g = gems[i];
+                let dist = Math.hypot(player.x - g.x, player.y - g.y);
+                if (dist < pickupRangeBase) {
+                    let angle = Math.atan2(player.y - g.y, player.x - g.x);
+                    g.x += Math.cos(angle) * 7;
+                    g.y += Math.sin(angle) * 7;
+
+                    if (dist < player.radius + 10) {
+                        addExp(g.value);
+                        gems.splice(i, 1);
+                    }
+                }
+            }
+
+            // 更新浮動字體
+            for (let i = floatTexts.length - 1; i >= 0; i--) {
+                let ft = floatTexts[i];
+                ft.y -= 0.8;
+                ft.life -= dt;
+                if (ft.life <= 0) floatTexts.splice(i, 1);
+            }
+        }
+
+        function spawnEnemy() {
+            let edge = Math.floor(Math.random() * 4);
+            let x, y;
+            if (edge === 0) { x = Math.random() * canvas.width; y = -30; }
+            else if (edge === 1) { x = Math.random() * canvas.width; y = canvas.height + 30; }
+            else if (edge === 2) { x = -30; y = Math.random() * canvas.height; }
+            else { x = canvas.width + 30; y = Math.random() * canvas.height; }
+
+            let typeRand = Math.random();
+            let eType, hp, speed, radius, color, expVal, damage;
+
+            if (typeRand < 0.6) {
+                // 普通史萊姆
+                hp = 30 + gameTime * 2;
+                speed = 2.0;
+                radius = 12;
+                color = '#ff5252';
+                expVal = 1;
+                damage = 15;
+            } else if (typeRand < 0.9) {
+                // 快速蝙蝠
+                hp = 20 + gameTime * 1.5;
+                speed = 3.2;
+                radius = 9;
+                color = '#ffeb3b';
+                expVal = 2;
+                damage = 10;
+            } else {
+                // 大型巨獸
+                hp = 120 + gameTime * 8;
+                speed = 1.1;
+                radius = 24;
+                color = '#ab47bc';
+                expVal = 5;
+                damage = 30;
+            }
+
+            enemies.push({ x, y, hp, maxHp: hp, speed, radius, color, expVal, damage });
+        }
+
+        function activateWeapon(weapon) {
+            if (enemies.length === 0) return;
+
+            // 尋找最近敵人
+            let target = enemies[0];
+            let minDist = Math.hypot(player.x - target.x, player.y - target.y);
+            for (let i = 1; i < enemies.length; i++) {
+                let dist = Math.hypot(player.x - enemies[i].x, player.y - enemies[i].y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    target = enemies[i];
+                }
+            }
+
+            if (weapon.id === 'fireball') {
+                let angle = Math.atan2(target.y - player.y, target.x - player.x);
+                let count = weapon.level >= 3 ? 2 : 1;
+                for (let i = 0; i < count; i++) {
+                    let offsetAngle = angle + (i === 0 ? 0 : (i % 2 === 0 ? 0.2 : -0.2));
+                    bullets.push({
+                        x: player.x,
+                        y: player.y,
+                        vx: Math.cos(offsetAngle) * 6,
+                        vy: Math.sin(offsetAngle) * 6,
+                        damage: weapon.damage + weapon.level * 8,
+                        radius: 8,
+                        life: 2.0,
+                        color: '#ff7043',
+                        pierce: false
+                    });
+                }
+            } else if (weapon.id === 'lightning') {
+                // 隨機電擊畫面上敵人
+                let affectedCount = 2 + weapon.level;
+                let hitCount = 0;
+                enemies.forEach(e => {
+                    if (hitCount < affectedCount && Math.hypot(player.x - e.x, player.y - e.y) < weapon.range) {
+                        let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
+                        let finalDmg = Math.floor((weapon.damage + weapon.level * 10) * powerBonus);
+                        e.hp -= finalDmg;
+                        floatTexts.push({ x: e.x, y: e.y, text: finalDmg, color: '#40c4ff', life: 0.6 });
+                        
+                        // 閃電特效線段
+                        particles.push({ type: 'lightning', x1: player.x, y1: player.y, x2: e.x, y2: e.y, life: 0.2 });
+
+                        if (e.hp <= 0) {
+                            killCount++;
+                            gems.push({ x: e.x, y: e.y, value: e.expVal });
+                        }
+                        hitCount++;
+                    }
+                });
+                // 清理死亡敵人
+                enemies = enemies.filter(e => e.hp > 0);
+            } else if (weapon.id === 'blade') {
+                // 環繞劍刃
+                let bladeCount = 2 + weapon.level;
+                for (let i = 0; i < bladeCount; i++) {
+                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
+                    let bx = player.x + Math.cos(angle) * 60;
+                    let by = player.y + Math.sin(angle) * 60;
+                    
+                    enemies.forEach(e => {
+                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
+                            let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
+                            let finalDmg = Math.floor((weapon.damage + weapon.level * 5) * powerBonus);
+                            e.hp -= finalDmg;
+                            floatTexts.push({ x: e.x, y: e.y, text: finalDmg, color: '#b0bec5', life: 0.4 });
+                        }
+                    });
+                }
+                enemies = enemies.filter(e => e.hp > 0);
+            }
+        }
+
+        function addExp(val) {
+            player.exp += val;
+            if (player.exp >= player.maxExp) {
+                player.exp -= player.maxExp;
+                player.level++;
+                player.maxExp = Math.floor(player.maxExp * 1.3);
+                triggerLevelUp();
+            }
+            updateHUD();
+        }
+
+        function triggerLevelUp() {
+            gamePaused = true;
+            let options = [];
+
+            // 隨機挑選 3 個可升級或解鎖的技能/被動
+            let availableChoices = [];
+            weapons.forEach(w => {
+                if (w.level < w.maxLevel) availableChoices.push({ type: 'weapon', item: w });
+            });
+            passives.forEach(p => {
+                if (p.level < p.maxLevel) availableChoices.push({ type: 'passive', item: p });
+            });
+
+            // 洗牌隨機取最多3個
+            availableChoices.sort(() => Math.random() - 0.5);
+            options = availableChoices.slice(0, 3);
+
+            let container = document.getElementById('upgradeCards');
+            container.innerHTML = '';
+
+            if (options.length === 0) {
+                // 若全部滿等則回補血量
+                player.hp = player.maxHp;
+                gamePaused = false;
+                return;
+            }
+
+            options.forEach(opt => {
+                let card = document.createElement('div');
+                card.className = 'upgrade-card';
+                let title = opt.item.name;
+                let desc = opt.type === 'weapon' ? `提升等級至 Lv.${opt.item.level + 1}` : opt.item.desc;
+                if (opt.item.level === 0) title += ' (解鎖!)';
+
+                card.innerHTML = `<h3>${title}</h3><p>${desc}</p>`;
+                card.onclick = () => {
+                    if (opt.type === 'weapon') {
+                        opt.item.level++;
+                    } else {
+                        opt.item.level++;
+                    }
+                    document.getElementById('upgradeScreen').classList.add('hidden');
+                    gamePaused = false;
+                    lastTime = performance.now();
+                    requestAnimationFrame(gameLoop);
+                };
+                container.appendChild(card);
+            });
+
+            document.getElementById('upgradeScreen').classList.remove('hidden');
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            const minutes = String(Math.floor(gameTime / 60)).padStart(2, '0');
+            const seconds = String(Math.floor(gameTime % 60)).padStart(2, '0');
+            document.getElementById('finalStats').innerText = `你撐過了 ${minutes}:${seconds}，擊敗了 ${killCount} 隻怪物。`;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 繪製地圖網格紋理
+            ctx.strokeStyle = '#222244';
+            ctx.lineWidth = 1;
+            let gridSize = 50;
+            let offsetX = Math.floor(-player.x) % gridSize;
+            let offsetY = Math.floor(-player.y) % gridSize;
+            ctx.beginPath();
+            for (let x = offsetX; x < canvas.width; x += gridSize) {
+                ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+            }
+            for (let y = offsetY; y < canvas.height; y += gridSize) {
+                ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            // 繪製經驗晶體
+            gems.forEach(g => {
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(g.x, g.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 繪製敵人
+            enemies.forEach(e => {
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // 繪製玩家
+            ctx.fillStyle = '#4cd137';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 繪製旋風劍刃武器軌跡
+            let bladeW = weapons.find(w => w.id === 'blade');
+            if (bladeW && bladeW.level > 0) {
+                let bladeCount = 2 + bladeW.level;
+                ctx.fillStyle = 'rgba(176, 190, 197, 0.7)';
+                for (let i = 0; i < bladeCount; i++) {
+                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
+                    let bx = player.x + Math.cos(angle) * 60;
+                    let by = player.y + Math.sin(angle) * 60;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // 繪製子彈
+            bullets.forEach(b => {
+                ctx.fillStyle = b.color;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 繪製閃電特效
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                if (p.type === 'lightning') {
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x1, p.y1);
+                    ctx.lineTo(p.x2, p.y2);
+                    ctx.stroke();
+                    p.life -= 0.05;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+            }
+
+            // 繪製浮動傷害數字
+            floatTexts.forEach(ft => {
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText(ft.text, ft.x, ft.y);
+            });
+
+            // 繪製虛擬搖桿觸控回饋
+            if (joystick.active) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(joystick.startX, joystick.startY, 40, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(joystick.x, joystick.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    </script>
+</body>
+</html>
