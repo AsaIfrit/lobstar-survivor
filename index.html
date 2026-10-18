@@ -275,7 +275,6 @@
         let killCount = 0;
         let chosenInitialSkill = 'fireball';
 
-        // 標題畫面無限延伸背景與跳躍敵人世界座標管理
         let titleCamX = 0;
         let titleCamY = 0;
         let titlePreviewEnemies = [];
@@ -340,6 +339,7 @@
         let gems = [];
         let items = [];
         let floatTexts = [];
+        let activeClouds = []; // 5等閃電鏈產生的雷雲
 
         let keys = {};
         let joystick = { active: false, id: null, startX: 0, startY: 0, x: 0, y: 0 };
@@ -436,6 +436,7 @@
             gems = [];
             items = [];
             floatTexts = [];
+            activeClouds = [];
 
             weapons.forEach(w => {
                 w.level = (w.id === chosenInitialSkill ? 1 : 0);
@@ -500,7 +501,6 @@
             let scaledWidth = canvas.width / cameraZoom;
             let scaledHeight = canvas.height / cameraZoom;
 
-            // 標題畫面相機持續等速滑動，背景 Pattern 完美無縫延伸無盡頭
             titleCamX += 0.8;
             titleCamY -= 0.8;
 
@@ -515,7 +515,6 @@
             }
             ctx.restore();
 
-            // 標題畫面敵人依照世界座標與跳躍移動完美對應背景
             titlePreviewEnemies.forEach(te => {
                 te.jumpTimer += dt;
                 if (te.jumpTimer >= 1.2) {
@@ -637,7 +636,7 @@
 
                 if (weapon.id === 'lightning') {
                     let hasEnemyInRange = enemies.some(e => Math.hypot(player.worldX - e.x, player.worldY - e.y) <= weapon.range);
-                    if (!hasEnemyInRange) return;
+                    if (!hasEnemyInRange && weapon.level < 5) return; // 5等雷雲技能可以獨立運作
                 }
 
                 weapon.timer += dt;
@@ -647,58 +646,135 @@
                 }
             });
 
+            // 雷雲（閃電鏈 Lv.5）更新邏輯
+            for (let i = activeClouds.length - 1; i >= 0; i--) {
+                let cloud = activeClouds[i];
+                cloud.life -= dt;
+                cloud.strikeTimer += dt;
+
+                // 烏雲自動緩緩追蹤最近的敵人
+                let nearest = null;
+                let minDist = Infinity;
+                enemies.forEach(e => {
+                    if (e.isDying) return;
+                    let d = Math.hypot(cloud.x - e.x, cloud.y - e.y);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearest = e;
+                    }
+                });
+
+                if (nearest) {
+                    let cAngle = Math.atan2(nearest.y - cloud.y, nearest.x - cloud.x);
+                    cloud.x += Math.cos(cAngle) * 1.8;
+                    cloud.y += Math.sin(cAngle) * 1.8;
+                }
+
+                // 每 0.6 秒自動轟下一道雷擊造成導電/感電效果
+                if (cloud.strikeTimer >= 0.6) {
+                    cloud.strikeTimer = 0;
+                    if (enemies.length > 0) {
+                        let targetEnemy = nearest || enemies[Math.floor(Math.random() * enemies.length)];
+                        if (targetEnemy && !targetEnemy.isDying) {
+                            playHitSound();
+                            let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
+                            let finalDmg = Math.floor(50 * powerBonus);
+
+                            targetEnemy.wetTimer = 3.0; // 附加潮濕觸發導電
+                            targetEnemy.stunTimer = 2.0;
+
+                            targetEnemy.hp -= finalDmg;
+                            if (targetEnemy.hp <= 0 && !targetEnemy.isDying) {
+                                startEnemyDeath(targetEnemy);
+                            }
+
+                            floatTexts.push({
+                                worldX: targetEnemy.x,
+                                worldY: targetEnemy.y - 15,
+                                vx: (Math.random() - 0.5) * 1.5,
+                                vy: -2.5,
+                                gravity: 0.15,
+                                text: '雷霆導電!',
+                                color: '#00ffff',
+                                life: 1.0,
+                                maxLife: 1.0
+                            });
+
+                            particles.push({
+                                type: 'lightning',
+                                startX: cloud.x,
+                                startY: cloud.y,
+                                targetX: targetEnemy.x,
+                                targetY: targetEnemy.y,
+                                life: 0.4
+                            });
+                        }
+                    }
+                }
+
+                if (cloud.life <= 0) {
+                    activeClouds.splice(i, 1);
+                }
+            }
+
+            // 防護水環更新（Lv.5 變成向外噴射的水柱群，蒸發/導電額外提升兩倍傷害）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
-                let bladeCount = 2 + bladeW.level;
-                for (let i = 0; i < bladeCount; i++) {
-                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
-                    let bx = player.worldX + Math.cos(angle) * 75;
-                    let by = player.worldY + Math.sin(angle) * 75;
+                let isMaxBlade = bladeW.level >= 5;
+                let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
+                let ringRadius = isMaxBlade ? 110 : 75;
 
-                    if (Math.random() < 0.4) {
+                for (let i = 0; i < bladeCount; i++) {
+                    let angle = (gameTime * (isMaxBlade ? 4.5 : 3)) + (Math.PI * 2 / bladeCount) * i;
+                    let bx = player.worldX + Math.cos(angle) * ringRadius;
+                    let by = player.worldY + Math.sin(angle) * ringRadius;
+
+                    if (Math.random() < (isMaxBlade ? 0.7 : 0.4)) {
                         particles.push({
                             type: 'smoke',
-                            worldX: bx + (Math.random() - 0.5) * 10,
-                            worldY: by + (Math.random() - 0.5) * 10,
-                            vx: (Math.random() - 0.5) * 1.5,
-                            vy: (Math.random() - 0.5) * 1.5,
-                            life: 0.3,
+                            worldX: bx + (Math.random() - 0.5) * 12,
+                            worldY: by + (Math.random() - 0.5) * 12,
+                            vx: isMaxBlade ? Math.cos(angle) * 3 : (Math.random() - 0.5) * 1.5,
+                            vy: isMaxBlade ? Math.sin(angle) * 3 : (Math.random() - 0.5) * 1.5,
+                            life: 0.4,
                             color: '#29b6f6',
-                            size: 2 + Math.floor(Math.random() * 2)
+                            size: isMaxBlade ? 4 : 2 + Math.floor(Math.random() * 2)
                         });
                     }
 
                     enemies.forEach(e => {
                         if (e.isDying) return;
-                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
+                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + (isMaxBlade ? 25 : 15)) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
                                 playHitSound();
 
                                 let pushAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
-                                e.x += Math.cos(pushAngle) * 8;
-                                e.y += Math.sin(pushAngle) * 8;
+                                e.x += Math.cos(pushAngle) * (isMaxBlade ? 14 : 8);
+                                e.y += Math.sin(pushAngle) * (isMaxBlade ? 14 : 8);
 
                                 e.wetTimer = 3.0;
 
                                 let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
-                                let baseDmg = (bladeW.damage + bladeW.level * 4) * powerBonus;
+                                let baseDmg = (bladeW.damage + bladeW.level * (isMaxBlade ? 12 : 4)) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
 
                                 if (e.burnTimer > 0) {
                                     e.burnTimer = 0;
-                                    finalDmg *= 2;
+                                    // 5等水環蒸發傷害額外提升兩倍（原本 2 倍變 4 倍）
+                                    let evapMultiplier = isMaxBlade ? 4 : 2;
+                                    finalDmg *= evapMultiplier;
 
-                                    for (let s = 0; s < 18; s++) {
+                                    for (let s = 0; s < 22; s++) {
                                         particles.push({
                                             type: 'smoke',
                                             worldX: e.x,
                                             worldY: e.y,
-                                            vx: (Math.random() - 0.5) * 4,
-                                            vy: (Math.random() - 0.5) * 4 - 1,
+                                            vx: (Math.random() - 0.5) * 5,
+                                            vy: (Math.random() - 0.5) * 5 - 1.5,
                                             life: 0.6,
-                                            color: Math.random() > 0.5 ? '#ffffff' : '#b3e5fc',
-                                            size: 5 + Math.floor(Math.random() * 4)
+                                            color: Math.random() > 0.5 ? '#ffffff' : '#00b0ff',
+                                            size: 6 + Math.floor(Math.random() * 5)
                                         });
                                     }
 
@@ -706,10 +782,10 @@
                                     floatTexts.push({
                                         worldX: e.x,
                                         worldY: e.y - 15,
-                                        vx: Math.cos(outAngle) * 1.5,
-                                        vy: -2.8,
+                                        vx: Math.cos(outAngle) * 1.8,
+                                        vy: -3.0,
                                         gravity: 0.15,
-                                        text: '蒸發',
+                                        text: isMaxBlade ? '極意蒸發 x4!' : '蒸發',
                                         color: '#ff5722',
                                         life: 1.0,
                                         maxLife: 1.0
@@ -772,7 +848,12 @@
                     if (e.burnTickTimer >= 1.0) {
                         e.burnTickTimer = 0;
                         playHitSound();
-                        let burnDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
+                        let fireballW = weapons.find(w => w.id === 'fireball');
+                        let isMaxFire = fireballW && fireballW.level >= 5;
+                        // 5等火球燃燒傷害變成 5 倍
+                        let burnBaseDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
+                        let burnDmg = isMaxFire ? burnBaseDmg * 5 : burnBaseDmg;
+
                         e.hp -= burnDmg;
                         if (e.hp <= 0 && !e.isDying) {
                             startEnemyDeath(e);
@@ -785,7 +866,7 @@
                             vx: Math.cos(outAngle) * 1.2,
                             vy: -2.2,
                             gravity: 0.15,
-                            text: burnDmg,
+                            text: isMaxFire ? `${burnDmg} (5x燃燒)` : burnDmg,
                             color: '#ff7043',
                             life: 1.0,
                             maxLife: 1.0
@@ -872,6 +953,7 @@
 
             checkEnemyDeaths();
 
+            // 子彈更新（5等火球體積變兩倍大、更強擊退與蒸發效果）
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -887,7 +969,7 @@
                         vy: (Math.random() - 0.5) * 1.5,
                         life: 0.3,
                         color: Math.random() > 0.5 ? '#ff7043' : '#ffeb3b',
-                        size: 3 + Math.floor(Math.random() * 3)
+                        size: (b.isMaxLevel ? 6 : 3) + Math.floor(Math.random() * 3)
                     });
                 }
 
@@ -895,12 +977,15 @@
                     let e = enemies[j];
                     if (e.isDying) continue;
 
-                    if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                    let hitRadius = b.radius + (b.isMaxLevel ? 10 : 0);
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < hitRadius + e.radius) {
                         playHitSound();
 
+                        // 5等火球具備更強的擊退效果
+                        let knockbackPower = b.isMaxLevel ? 22 : 10;
                         let pushAngle = Math.atan2(e.y - b.y, e.x - b.x);
-                        e.x += Math.cos(pushAngle) * 10;
-                        e.y += Math.sin(pushAngle) * 10;
+                        e.x += Math.cos(pushAngle) * knockbackPower;
+                        e.y += Math.sin(pushAngle) * knockbackPower;
 
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor(b.damage * powerBonus);
@@ -908,18 +993,19 @@
                         if (b.id === 'fireball') {
                             if (e.wetTimer > 0) {
                                 e.wetTimer = 0;
-                                finalDmg *= 2;
+                                let evapMultiplier = b.isMaxLevel ? 4 : 2; // 5等水火蒸發額外提升兩倍
+                                finalDmg *= evapMultiplier;
 
-                                for (let s = 0; s < 18; s++) {
+                                for (let s = 0; s < 22; s++) {
                                     particles.push({
                                         type: 'smoke',
                                         worldX: e.x,
                                         worldY: e.y,
-                                        vx: (Math.random() - 0.5) * 4,
-                                        vy: (Math.random() - 0.5) * 4 - 1,
+                                        vx: (Math.random() - 0.5) * 5,
+                                        vy: (Math.random() - 0.5) * 5 - 1.5,
                                         life: 0.6,
                                         color: Math.random() > 0.5 ? '#ffffff' : '#b3e5fc',
-                                        size: 5 + Math.floor(Math.random() * 4)
+                                        size: 6 + Math.floor(Math.random() * 4)
                                     });
                                 }
 
@@ -927,10 +1013,10 @@
                                 floatTexts.push({
                                     worldX: e.x,
                                     worldY: e.y - 15,
-                                    vx: Math.cos(outAngle) * 1.5,
-                                    vy: -2.8,
+                                    vx: Math.cos(outAngle) * 1.8,
+                                    vy: -3.0,
                                     gravity: 0.15,
-                                    text: '蒸發',
+                                    text: b.isMaxLevel ? '極意蒸發 x4!' : '蒸發',
                                     color: '#ff5722',
                                     life: 1.0,
                                     maxLife: 1.0
@@ -1131,7 +1217,7 @@
         }
 
         function activateWeapon(weapon) {
-            if (enemies.length === 0) return;
+            if (enemies.length === 0 && weapon.level < 5) return;
 
             let target = null;
             let minDist = Infinity;
@@ -1145,17 +1231,32 @@
             });
 
             if (!target && enemies.length > 0) target = enemies[0];
-            if (!target) return;
 
             if (weapon.id === 'fireball' || weapon.id === 'lightning') {
                 player.currentSkillName = weapon.name;
                 player.skillNameTimer = 0.6;
             }
 
+            // 5等閃電鏈：在場地上召喚持續5秒的烏雲
+            if (weapon.id === 'lightning' && weapon.level >= 5) {
+                activeClouds.push({
+                    x: player.worldX + (Math.random() - 0.5) * 100,
+                    y: player.worldY + (Math.random() - 0.5) * 100,
+                    life: 5.0,
+                    strikeTimer: 0
+                });
+                player.currentSkillName = '雷雲降臨 Lv.5';
+                player.skillNameTimer = 0.8;
+                return;
+            }
+
+            if (!target) return;
+
             if (weapon.id === 'fireball') {
                 player.isAttacking = true;
                 player.atkTimer = 0.25;
 
+                let isMaxFire = weapon.level >= 5;
                 let angle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
                 let count = weapon.level >= 3 ? 2 : 1;
                 for (let i = 0; i < count; i++) {
@@ -1167,10 +1268,11 @@
                         vx: Math.cos(offsetAngle) * 6,
                         vy: Math.sin(offsetAngle) * 6,
                         damage: weapon.damage + weapon.level * 8,
-                        radius: 10,
+                        radius: isMaxFire ? 20 : 10, // 5等火球兩倍大
                         life: 2.0,
                         color: '#ff7043',
-                        pierce: false
+                        pierce: false,
+                        isMaxLevel: isMaxFire
                     });
                 }
             } else if (weapon.id === 'lightning') {
@@ -1513,6 +1615,21 @@
                 }
             });
 
+            // 渲染雷雲（5等閃電鏈）
+            activeClouds.forEach(cloud => {
+                let cx = cloud.x - camX;
+                let cy = cloud.y - camY;
+                ctx.fillStyle = 'rgba(60, 60, 80, 0.85)';
+                ctx.fillRect(cx - 30, cy - 15, 60, 30);
+                ctx.fillStyle = '#b0bec5';
+                ctx.fillRect(cx - 20, cy - 22, 40, 20);
+                ctx.fillStyle = '#00ffff';
+                let sparkFlash = Math.floor(gameTime * 30) % 2;
+                if (sparkFlash === 0) {
+                    ctx.fillRect(cx - 6, cy + 10, 12, 10);
+                }
+            });
+
             let playerScreenX = scaledWidth / 2;
             let playerScreenY = scaledHeight / 2;
 
@@ -1586,17 +1703,20 @@
 
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
-                let bladeCount = 2 + bladeW.level;
+                let isMaxBlade = bladeW.level >= 5;
+                let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
+                let ringRadius = isMaxBlade ? 110 : 75;
+
                 for (let i = 0; i < bladeCount; i++) {
-                    let angle = (gameTime * 3) + (Math.PI * 2 / bladeCount) * i;
-                    let bx = playerScreenX + Math.cos(angle) * 75;
-                    let by = playerScreenY + Math.sin(angle) * 75;
+                    let angle = (gameTime * (isMaxBlade ? 4.5 : 3)) + (Math.PI * 2 / bladeCount) * i;
+                    let bx = playerScreenX + Math.cos(angle) * ringRadius;
+                    let by = playerScreenY + Math.sin(angle) * ringRadius;
                     
                     ctx.fillStyle = '#29b6f6';
-                    ctx.fillRect(bx - 8, by - 8, 16, 16);
+                    ctx.fillRect(bx - (isMaxBlade ? 10 : 8), by - (isMaxBlade ? 10 : 8), isMaxBlade ? 20 : 16, isMaxBlade ? 20 : 16);
                     ctx.strokeStyle = '#ffffff';
                     ctx.lineWidth = 1.5;
-                    ctx.strokeRect(bx - 8, by - 8, 16, 16);
+                    ctx.strokeRect(bx - (isMaxBlade ? 10 : 8), by - (isMaxBlade ? 10 : 8), isMaxBlade ? 20 : 16, isMaxBlade ? 20 : 16);
                 }
             }
 
