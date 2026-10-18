@@ -339,7 +339,7 @@
         let gems = [];
         let items = [];
         let floatTexts = [];
-        let activeClouds = []; // 5等閃電鏈產生的雷雲
+        let activeClouds = [];
 
         let keys = {};
         let joystick = { active: false, id: null, startX: 0, startY: 0, x: 0, y: 0 };
@@ -636,7 +636,7 @@
 
                 if (weapon.id === 'lightning') {
                     let hasEnemyInRange = enemies.some(e => Math.hypot(player.worldX - e.x, player.worldY - e.y) <= weapon.range);
-                    if (!hasEnemyInRange && weapon.level < 5) return; // 5等雷雲技能可以獨立運作
+                    if (!hasEnemyInRange && weapon.level < 4) return; // Lv.4 以上雷雲可獨立運作
                 }
 
                 weapon.timer += dt;
@@ -646,13 +646,12 @@
                 }
             });
 
-            // 雷雲（閃電鏈 Lv.5）更新邏輯
+            // 雷雲（閃電鏈 Lv.4+）更新邏輯
             for (let i = activeClouds.length - 1; i >= 0; i--) {
                 let cloud = activeClouds[i];
                 cloud.life -= dt;
                 cloud.strikeTimer += dt;
 
-                // 烏雲自動緩緩追蹤最近的敵人
                 let nearest = null;
                 let minDist = Infinity;
                 enemies.forEach(e => {
@@ -670,7 +669,6 @@
                     cloud.y += Math.sin(cAngle) * 1.8;
                 }
 
-                // 每 0.6 秒自動轟下一道雷擊造成導電/感電效果
                 if (cloud.strikeTimer >= 0.6) {
                     cloud.strikeTimer = 0;
                     if (enemies.length > 0) {
@@ -680,7 +678,7 @@
                             let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                             let finalDmg = Math.floor(50 * powerBonus);
 
-                            targetEnemy.wetTimer = 3.0; // 附加潮濕觸發導電
+                            targetEnemy.wetTimer = 3.0;
                             targetEnemy.stunTimer = 2.0;
 
                             targetEnemy.hp -= finalDmg;
@@ -717,10 +715,10 @@
                 }
             }
 
-            // 防護水環更新（Lv.5 變成向外噴射的水柱群，蒸發/導電額外提升兩倍傷害）
+            // 防護水環更新（僅在 Lv.4+ 觸發水柱群與兩倍蒸發增幅）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
-                let isMaxBlade = bladeW.level >= 5;
+                let isMaxBlade = bladeW.level >= 4;
                 let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
                 let ringRadius = isMaxBlade ? 110 : 75;
 
@@ -761,7 +759,7 @@
 
                                 if (e.burnTimer > 0) {
                                     e.burnTimer = 0;
-                                    // 5等水環蒸發傷害額外提升兩倍（原本 2 倍變 4 倍）
+                                    // Lv.4+ 水環蒸發傷害額外提升兩倍（原本 2 倍變 4 倍）
                                     let evapMultiplier = isMaxBlade ? 4 : 2;
                                     finalDmg *= evapMultiplier;
 
@@ -849,8 +847,8 @@
                         e.burnTickTimer = 0;
                         playHitSound();
                         let fireballW = weapons.find(w => w.id === 'fireball');
-                        let isMaxFire = fireballW && fireballW.level >= 5;
-                        // 5等火球燃燒傷害變成 5 倍
+                        let isMaxFire = fireballW && fireballW.level >= 4;
+                        // Lv.4+ 火球燃燒傷害變成 5 倍
                         let burnBaseDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
                         let burnDmg = isMaxFire ? burnBaseDmg * 5 : burnBaseDmg;
 
@@ -953,7 +951,7 @@
 
             checkEnemyDeaths();
 
-            // 子彈更新（5等火球體積變兩倍大、更強擊退與蒸發效果）
+            // 子彈更新（僅在 Lv.4+ 觸發 2 倍大火球與強效擊退）
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -981,7 +979,6 @@
                     if (Math.hypot(b.x - e.x, b.y - e.y) < hitRadius + e.radius) {
                         playHitSound();
 
-                        // 5等火球具備更強的擊退效果
                         let knockbackPower = b.isMaxLevel ? 22 : 10;
                         let pushAngle = Math.atan2(e.y - b.y, e.x - b.x);
                         e.x += Math.cos(pushAngle) * knockbackPower;
@@ -993,7 +990,7 @@
                         if (b.id === 'fireball') {
                             if (e.wetTimer > 0) {
                                 e.wetTimer = 0;
-                                let evapMultiplier = b.isMaxLevel ? 4 : 2; // 5等水火蒸發額外提升兩倍
+                                let evapMultiplier = b.isMaxLevel ? 4 : 2;
                                 finalDmg *= evapMultiplier;
 
                                 for (let s = 0; s < 22; s++) {
@@ -1217,7 +1214,7 @@
         }
 
         function activateWeapon(weapon) {
-            if (enemies.length === 0 && weapon.level < 5) return;
+            if (enemies.length === 0 && weapon.level < 4) return;
 
             let target = null;
             let minDist = Infinity;
@@ -1237,15 +1234,15 @@
                 player.skillNameTimer = 0.6;
             }
 
-            // 5等閃電鏈：在場地上召喚持續5秒的烏雲
-            if (weapon.id === 'lightning' && weapon.level >= 5) {
+            // 僅在 Lv.4+ 閃電鏈時觸發雷雲召喚
+            if (weapon.id === 'lightning' && weapon.level >= 4) {
                 activeClouds.push({
                     x: player.worldX + (Math.random() - 0.5) * 100,
                     y: player.worldY + (Math.random() - 0.5) * 100,
                     life: 5.0,
                     strikeTimer: 0
                 });
-                player.currentSkillName = '雷雲降臨 Lv.5';
+                player.currentSkillName = '雷雲降臨 Lv.4';
                 player.skillNameTimer = 0.8;
                 return;
             }
@@ -1256,7 +1253,7 @@
                 player.isAttacking = true;
                 player.atkTimer = 0.25;
 
-                let isMaxFire = weapon.level >= 5;
+                let isMaxFire = weapon.level >= 4;
                 let angle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
                 let count = weapon.level >= 3 ? 2 : 1;
                 for (let i = 0; i < count; i++) {
@@ -1268,7 +1265,7 @@
                         vx: Math.cos(offsetAngle) * 6,
                         vy: Math.sin(offsetAngle) * 6,
                         damage: weapon.damage + weapon.level * 8,
-                        radius: isMaxFire ? 20 : 10, // 5等火球兩倍大
+                        radius: isMaxFire ? 20 : 10,
                         life: 2.0,
                         color: '#ff7043',
                         pierce: false,
@@ -1615,7 +1612,7 @@
                 }
             });
 
-            // 渲染雷雲（5等閃電鏈）
+            // 渲染雷雲（Lv.4+ 閃電鏈）
             activeClouds.forEach(cloud => {
                 let cx = cloud.x - camX;
                 let cy = cloud.y - camY;
@@ -1703,7 +1700,7 @@
 
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
-                let isMaxBlade = bladeW.level >= 5;
+                let isMaxBlade = bladeW.level >= 4;
                 let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
                 let ringRadius = isMaxBlade ? 110 : 75;
 
