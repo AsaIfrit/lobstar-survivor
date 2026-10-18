@@ -209,7 +209,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // 載入主角圖片 (待機 2 張 + 攻擊 1 張)
+        // 載入主角圖片
         const playerIdleImages = [];
         const playerAtkImage = new Image();
         playerAtkImage.src = 'Front_atk.png';
@@ -227,12 +227,12 @@
         let killCount = 0;
         let lastTime = 0;
 
-        // 玩家物件（世界座標與動畫狀態）
+        // 玩家物件
         let player = {
             worldX: 0,
             worldY: 0,
             radius: 20,
-            speed: 2.3,
+            speed: 2.3, // 固定速度，升級不再提高
             maxHp: 100,
             hp: 100,
             level: 1,
@@ -241,9 +241,9 @@
             pickupRadius: 80,
             animTimer: 0,
             currentFrame: 0,
-            facingRight: false, // 移動方向 (false: 朝左, true: 朝右)
-            isAttacking: false, // 是否處於攻擊狀態
-            atkTimer: 0         // 攻擊動畫持續時間
+            facingRight: false,
+            isAttacking: false,
+            atkTimer: 0
         };
 
         let weapons = [
@@ -368,7 +368,7 @@
                 updateHUD();
             }
 
-            // 更新攻擊狀態倒數 (攻擊動作持續 0.25 秒)
+            // 更新攻擊動作倒數
             if (player.isAttacking) {
                 player.atkTimer -= dt;
                 if (player.atkTimer <= 0) {
@@ -401,7 +401,6 @@
                 }
             }
 
-            // 判斷角色左右朝向
             if (moveX > 0) player.facingRight = true;
             if (moveX < 0) player.facingRight = false;
 
@@ -414,8 +413,8 @@
             player.worldX += moveX * currentSpeed;
             player.worldY += moveY * currentSpeed;
 
-            // 生成敵人 (前2分鐘難度降)
-            let spawnRate = gameTime < 120 ? 0.015 : (0.03 + gameTime * 0.001);
+            // 生成敵人 (降難度)
+            let spawnRate = gameTime < 120 ? 0.012 : (0.025 + gameTime * 0.0005);
             if (Math.random() < spawnRate) {
                 spawnEnemy();
             }
@@ -430,7 +429,7 @@
                 }
             });
 
-            // 旋風劍刃：持續區域碰撞傷害判定（修復無法造成傷害問題）
+            // 旋風劍刃持續命中判定
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -451,7 +450,6 @@
                         }
                     });
                 }
-                // 清理死亡敵人
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     if (enemies[i].hp <= 0) {
                         killCount++;
@@ -545,30 +543,31 @@
             let typeRand = Math.random();
             let hp, speed, radius, color, expVal, damage;
 
+            // 前2分鐘（120秒）怪物難度大幅調降
             let isEarlyGame = gameTime < 120;
-            let earlyMult = isEarlyGame ? 0.5 : 1.0;
+            let earlyMult = isEarlyGame ? 0.35 : 0.7; // 大幅調低血量與成長
 
             if (typeRand < 0.6) {
-                hp = (30 + gameTime * 1.5) * earlyMult;
-                speed = 1.4 * earlyMult;
+                hp = (20 + gameTime * 0.8) * earlyMult;
+                speed = 1.0 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 12;
                 color = '#ff5252';
                 expVal = 1;
-                damage = 10;
+                damage = 8;
             } else if (typeRand < 0.9) {
-                hp = (20 + gameTime * 1.0) * earlyMult;
-                speed = 2.2 * earlyMult;
+                hp = (15 + gameTime * 0.5) * earlyMult;
+                speed = 1.5 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 9;
                 color = '#ffeb3b';
                 expVal = 2;
-                damage = 8;
+                damage = 6;
             } else {
-                hp = (100 + gameTime * 5) * earlyMult;
-                speed = 0.9 * earlyMult;
+                hp = (60 + gameTime * 2.5) * earlyMult;
+                speed = 0.7 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 24;
                 color = '#ab47bc';
                 expVal = 5;
-                damage = 20;
+                damage = 15;
             }
 
             enemies.push({ x, y, hp, maxHp: hp, speed, radius, color, expVal, damage });
@@ -590,11 +589,11 @@
             if (!target && enemies.length > 0) target = enemies[0];
             if (!target) return;
 
-            // 觸發主角攻擊圖片動畫！
-            player.isAttacking = true;
-            player.atkTimer = 0.25;
-
             if (weapon.id === 'fireball') {
+                // 只有發射火球時才會觸發主角攻擊動作
+                player.isAttacking = true;
+                player.atkTimer = 0.25;
+
                 let angle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
                 let count = weapon.level >= 3 ? 2 : 1;
                 for (let i = 0; i < count; i++) {
@@ -612,6 +611,7 @@
                     });
                 }
             } else if (weapon.id === 'lightning') {
+                // 閃電鏈不觸發主角攻擊動作，但特效生命週期延長 0.25 秒（生命週期改為 0.45 秒）
                 let affectedCount = 2 + weapon.level;
                 let hitCount = 0;
                 enemies.forEach(e => {
@@ -622,7 +622,8 @@
                         e.hp -= finalDmg;
                         floatTexts.push({ worldX: e.x, worldY: e.y, text: finalDmg, color: '#40c4ff', life: 0.6 });
                         
-                        particles.push({ type: 'lightning', worldX1: player.worldX, worldY1: player.worldY, worldX2: e.x, worldY2: e.y, life: 0.2 });
+                        // 特效存在時間延長（0.25 + 0.2 = 0.45）
+                        particles.push({ type: 'lightning', worldX1: player.worldX, worldY1: player.worldY, worldX2: e.x, worldY2: e.y, life: 0.45 });
 
                         if (e.hp <= 0) {
                             killCount++;
@@ -678,6 +679,7 @@
                 card.innerHTML = `<h3>${title}</h3><p>${desc}</p>`;
                 card.onclick = () => {
                     opt.item.level++;
+                    player.hp = player.maxHp; // 升級回滿血，不提升基本移速
                     document.getElementById('upgradeScreen').classList.add('hidden');
                     gamePaused = false;
                     lastTime = performance.now();
@@ -745,11 +747,10 @@
                 }
             });
 
-            // 繪製主角圖片 (支援攻擊狀態與左右翻轉)
+            // 繪製主角圖片
             let playerScreenX = canvas.width / 2;
             let playerScreenY = canvas.height / 2;
             
-            // 挑選當前應繪製的圖片 (攻擊狀態優先)
             let currentImg = player.isAttacking ? playerAtkImage : playerIdleImages[player.currentFrame];
 
             if (currentImg && currentImg.complete && currentImg.naturalWidth !== 0) {
@@ -757,7 +758,6 @@
                 ctx.save();
                 ctx.translate(playerScreenX, playerScreenY);
                 
-                // 若往右移動，進行左右翻轉
                 if (player.facingRight) {
                     ctx.scale(-1, 1);
                 }
@@ -771,14 +771,13 @@
                 );
                 ctx.restore();
             } else {
-                // 備用圓形
                 ctx.fillStyle = '#4cd137';
                 ctx.beginPath();
                 ctx.arc(playerScreenX, playerScreenY, player.radius, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // 旋風劍刃繪製
+            // 旋風劍刃
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -803,7 +802,7 @@
                 ctx.fill();
             });
 
-            // 閃電特效
+            // 閃電特效（繪製時間延長）
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 if (p.type === 'lightning') {
@@ -817,7 +816,7 @@
                     ctx.moveTo(sx1, sy1);
                     ctx.lineTo(sx2, sy2);
                     ctx.stroke();
-                    p.life -= 0.05;
+                    p.life -= 0.016; // 配合幀率流暢倒數
                     if (p.life <= 0) particles.splice(i, 1);
                 }
             }
