@@ -456,7 +456,8 @@
             player.worldX += moveX * currentSpeed;
             player.worldY += moveY * currentSpeed;
 
-            let spawnRate = gameTime < 120 ? 0.012 : (0.025 + gameTime * 0.0005);
+            // 稍微提升敵人出現頻率
+            let spawnRate = gameTime < 120 ? 0.018 : (0.035 + gameTime * 0.0008);
             if (Math.random() < spawnRate) {
                 spawnEnemy();
             }
@@ -470,7 +471,7 @@
                 }
             });
 
-            // 旋風劍刃持續判定
+            // 旋風劍刃持續判定（不顯示技能名稱）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -565,7 +566,6 @@
                 b.y += b.vy;
                 b.life -= dt;
 
-                // 火焰彈飛行時隨機產生飛散小火星粒子
                 if (b.id === 'fireball' && Math.random() < 0.6) {
                     particles.push({
                         type: 'spark',
@@ -609,7 +609,6 @@
                 }
             }
 
-            // 更新粒子
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 if (p.type === 'spark') {
@@ -711,8 +710,11 @@
             if (!target && enemies.length > 0) target = enemies[0];
             if (!target) return;
 
-            player.currentSkillName = weapon.name;
-            player.skillNameTimer = 0.6;
+            // 旋風劍刃不顯示技能名稱
+            if (weapon.id !== 'blade') {
+                player.currentSkillName = weapon.name;
+                player.skillNameTimer = 0.6;
+            }
 
             if (weapon.id === 'fireball') {
                 player.isAttacking = true;
@@ -837,7 +839,6 @@
             let camX = player.worldX - scaledWidth / 2;
             let camY = player.worldY - scaledHeight / 2;
 
-            // 背景拼貼
             ctx.save();
             if (bgPattern) {
                 ctx.fillStyle = bgPattern;
@@ -849,7 +850,6 @@
             }
             ctx.restore();
 
-            // 經驗晶體 (像素方塊晶体風格)
             gems.forEach(g => {
                 let screenX = g.x - camX;
                 let screenY = g.y - camY;
@@ -862,7 +862,6 @@
                 }
             });
 
-            // 敵人 (全面改為像素風格方塊樣式)
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -883,7 +882,6 @@
                 }
             });
 
-            // 主角繪製
             let playerScreenX = scaledWidth / 2;
             let playerScreenY = scaledHeight / 2;
             
@@ -918,7 +916,6 @@
                 }
             }
 
-            // 主角頭頂技能名稱
             if (player.currentSkillName) {
                 ctx.font = 'bold 12px sans-serif';
                 let textMetrics = ctx.measureText(player.currentSkillName);
@@ -938,7 +935,6 @@
                 ctx.fillText(player.currentSkillName, playerScreenX, boxY + boxHeight / 2);
             }
 
-            // 主角血量條
             let hpBarWidth = 40;
             let hpBarHeight = 6;
             let hpPercent = Math.max(0, player.hp / player.maxHp);
@@ -952,7 +948,6 @@
             ctx.fillStyle = '#4cd137';
             ctx.fillRect(barX, barY, hpBarWidth * hpPercent, hpBarHeight);
 
-            // 旋風劍刃 (改為像素方塊樣式)
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -968,7 +963,6 @@
                 }
             }
 
-            // 火焰彈與技能子彈 (改為方塊樣式)
             bullets.forEach(b => {
                 let screenX = b.x - camX;
                 let screenY = b.y - camY;
@@ -979,7 +973,6 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
-            // 飛行小火星與閃電特效
             particles.forEach(p => {
                 if (p.type === 'spark') {
                     let sx = p.worldX - camX;
@@ -1000,7 +993,6 @@
                 }
             });
 
-            // 傷害數字
             floatTexts.forEach(ft => {
                 let screenX = ft.worldX - camX;
                 let screenY = ft.worldY - camY;
@@ -1013,7 +1005,6 @@
 
             ctx.restore();
 
-            // 虛擬搖桿
             if (joystick.active) {
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 4;
