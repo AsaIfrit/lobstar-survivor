@@ -281,7 +281,7 @@
         let bullets = [];
         let particles = [];
         let gems = [];
-        let items = []; // 掉落道具 (心子、磁鐵、炸彈)
+        let items = [];
         let floatTexts = [];
 
         let keys = {};
@@ -528,12 +528,10 @@
                                 let baseDmg = (bladeW.damage + bladeW.level * 4) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
 
-                                // 蒸發反應
                                 if (e.burnTimer > 0) {
                                     e.burnTimer = 0;
                                     finalDmg *= 2;
 
-                                    // 產生白色煙霧效果粒子
                                     for (let s = 0; s < 12; s++) {
                                         particles.push({
                                             type: 'smoke',
@@ -593,14 +591,13 @@
                     e.burnTimer -= dt;
                     e.burnTickTimer += dt;
 
-                    // 燃燒時身上向上飄散火星
                     if (Math.random() < 0.5) {
                         particles.push({
                             type: 'spark',
                             worldX: e.x + (Math.random() - 0.5) * e.radius,
                             worldY: e.y + (Math.random() - 0.5) * e.radius,
                             vx: (Math.random() - 0.5) * 0.8,
-                            vy: -1.5 - Math.random() * 1.0, // 向上飄散
+                            vy: -1.5 - Math.random() * 1.0,
                             life: 0.4,
                             color: Math.random() > 0.5 ? '#ff7043' : '#ffca28'
                         });
@@ -714,7 +711,6 @@
                         let finalDmg = Math.floor(b.damage * powerBonus);
                         e.hp -= finalDmg;
 
-                        // 烈焰球燃燒狀態與「燃燒」文字提示
                         if (b.id === 'fireball') {
                             let wasBurning = e.burnTimer > 0;
                             e.burnTimer = 2.0;
@@ -844,14 +840,9 @@
         function handleEnemyDeath(e) {
             gems.push({ x: e.x, y: e.y, value: e.expVal });
 
-            // 5% 機率掉落道具 (心子、磁鐵、炸彈)
+            // 5% 機率掉落道具 (僅保留 ❤愛心 與 🧲磁鐵，已移除炸彈)
             if (Math.random() < 0.05) {
-                let randType = Math.random();
-                let type = 'heart';
-                if (randType < 0.33) type = 'heart';
-                else if (randType < 0.66) type = 'magnet';
-                else type = 'bomb';
-
+                let type = Math.random() < 0.5 ? 'heart' : 'magnet';
                 items.push({ x: e.x, y: e.y, type: type });
             }
         }
@@ -862,18 +853,9 @@
                 updateHUD();
                 floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '+50% HP', color: '#ff416c', life: 1.0, maxLife: 1.0 });
             } else if (type === 'magnet') {
-                // 吸引全場所有經驗晶體與道具
                 gems.forEach(g => { g.x = player.worldX; g.y = player.worldY; });
                 items.forEach(it => { it.x = player.worldX; it.y = player.worldY; });
                 floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '全場吸收!', color: '#00dbde', life: 1.0, maxLife: 1.0 });
-            } else if (type === 'bomb') {
-                // 消滅場上所有敵人
-                enemies.forEach(e => {
-                    killCount++;
-                    gems.push({ x: e.x, y: e.y, value: e.expVal });
-                    floatTexts.push({ worldX: e.x, worldY: e.y, vx: 0, vy: -2, gravity: 0.1, text: 'BOOM!', color: '#ffca28', life: 1.0, maxLife: 1.0 });
-                });
-                enemies = [];
             }
         }
 
@@ -889,8 +871,9 @@
             let isEarlyGame = gameTime < 120;
             let earlyMult = isEarlyGame ? 0.35 : 0.7;
 
+            // 所有敵人血量提升為 2 倍 (乘以 2.0)
             if (typeRand < 0.6) {
-                hp = (20 + gameTime * 0.8) * earlyMult;
+                hp = (20 + gameTime * 0.8) * earlyMult * 2.0;
                 speed = 1.0 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 16;
                 color = '#ff5252';
@@ -898,7 +881,7 @@
                 damage = 12;
                 isJumper = false;
             } else if (typeRand < 0.9) {
-                hp = (15 + gameTime * 0.5) * earlyMult;
+                hp = (15 + gameTime * 0.5) * earlyMult * 2.0;
                 speed = 1.8 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 12;
                 color = '#ffeb3b';
@@ -906,7 +889,7 @@
                 damage = 10;
                 isJumper = true;
             } else {
-                hp = (60 + gameTime * 2.5) * earlyMult;
+                hp = (60 + gameTime * 2.5) * earlyMult * 2.0;
                 speed = 1.1 * (isEarlyGame ? 0.8 : 1.0);
                 radius = 28;
                 color = '#ab47bc';
@@ -1107,12 +1090,12 @@
                 }
             });
 
-            // 掉落道具 (❤愛心, 🧲磁鐵, 💣炸彈)
+            // 掉落道具 (❤愛心, 🧲磁鐵)
             items.forEach(it => {
                 let screenX = it.x - camX;
                 let screenY = it.y - camY;
                 if (screenX >= -20 && screenX <= scaledWidth + 20 && screenY >= -20 && screenY <= scaledHeight + 20) {
-                    ctx.fillStyle = it.type === 'heart' ? '#ff416c' : (it.type === 'magnet' ? '#00dbde' : '#ffca28');
+                    ctx.fillStyle = it.type === 'heart' ? '#ff416c' : '#00dbde';
                     ctx.fillRect(screenX - 8, screenY - 8, 16, 16);
                     ctx.strokeStyle = '#ffffff';
                     ctx.lineWidth = 1.5;
@@ -1242,7 +1225,7 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
-            // 粒子特效渲染 (火星、閃電、煙霧)
+            // 粒子特效渲染
             particles.forEach(p => {
                 let sx = p.worldX - camX;
                 let sy = p.worldY - camY;
