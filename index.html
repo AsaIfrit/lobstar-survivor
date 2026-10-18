@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Element Survivor - 元素倖存者</title>
+    <title>Lobstar-survivor</title>
     <style>
         * {
             box-sizing: border-box;
@@ -21,7 +21,7 @@
         }
         canvas {
             display: block;
-            background: #1a1a2e;
+            background: #a8d5ba;
             image-rendering: pixelated; /* 保持像素銳利不模糊 */
         }
         #ui-layer {
@@ -178,7 +178,7 @@
 
     <!-- 開始遊戲畫面 -->
     <div id="startScreen" class="overlay">
-        <h1>Element Survivor</h1>
+        <h1>Lobstar-survivor</h1>
         <p>運用元素精靈的力量，在無盡的魔物浪潮中生存下去！<br>使用 <b>WASD / 方向鍵</b> 移動，或在手機上使用<b>虛擬搖桿</b>滑動。</p>
         <button class="btn" onclick="startGame()">開始冒險</button>
     </div>
@@ -209,7 +209,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // 載入主角圖片
+        // 載入圖片資源
         const playerIdleImages = [];
         const playerAtkImage = new Image();
         playerAtkImage.src = 'Front_atk.png';
@@ -221,18 +221,25 @@
             playerIdleImages[index] = img;
         });
 
+        // 載入背景拼貼圖
+        const bgImage = new Image();
+        bgImage.src = 'background_01.png';
+        let bgPattern = null;
+        bgImage.onload = () => {
+            bgPattern = ctx.createPattern(bgImage, 'repeat');
+        };
+
         let gameRunning = false;
         let gamePaused = false;
         let gameTime = 0;
         let killCount = 0;
-        let lastTime = 0;
 
         // 玩家物件
         let player = {
             worldX: 0,
             worldY: 0,
-            radius: 24, // 放大判定半徑
-            speed: 2.3, // 移速固定，不受升級影響
+            radius: 24,
+            speed: 3.2, // 固定的基礎移動速度
             maxHp: 100,
             hp: 100,
             level: 1,
@@ -297,7 +304,6 @@
             document.getElementById('startScreen').classList.add('hidden');
             resetGame();
             gameRunning = true;
-            lastTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
 
@@ -305,7 +311,6 @@
             document.getElementById('gameOverScreen').classList.add('hidden');
             resetGame();
             gameRunning = true;
-            lastTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
 
@@ -349,13 +354,28 @@
             document.getElementById('expBar').style.width = `${expPercent}%`;
         }
 
+        // 固定時間步長迴圈，確保速度絕對不會隨等級或幀率變快
+        const dt = 1 / 60;
+        let accumulatedTime = 0;
+        let lastTimestamp = 0;
+
         function gameLoop(timestamp) {
             if (!gameRunning) return;
-            const dt = (timestamp - lastTime) / 1000;
-            lastTime = timestamp;
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            let frameTime = (timestamp - lastTimestamp) / 1000;
+            lastTimestamp = timestamp;
+
+            if (frameTime > 0.25) frameTime = 0.25;
+            accumulatedTime += frameTime;
+
+            while (accumulatedTime >= dt) {
+                if (!gamePaused) {
+                    update(dt);
+                }
+                accumulatedTime -= dt;
+            }
 
             if (!gamePaused) {
-                update(dt);
                 render();
             }
 
@@ -425,7 +445,7 @@
                 }
             });
 
-            // 旋風劍刃判定（配合 2 倍放大調整軌跡距離）
+            // 旋風劍刃判定
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -521,7 +541,7 @@
 
             for (let i = floatTexts.length - 1; i >= 0; i--) {
                 let ft = floatTexts[i];
-                ft.worldY -= 0.8;
+                ft.worldY -= 0.8 * dt * 60;
                 ft.life -= dt;
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
@@ -668,10 +688,10 @@
                 card.innerHTML = `<h3>${title}</h3><p>${desc}</p>`;
                 card.onclick = () => {
                     opt.item.level++;
-                    player.hp = player.maxHp; // 僅回血，絕對不提升移動速度
+                    player.hp = player.maxHp;
                     document.getElementById('upgradeScreen').classList.add('hidden');
                     gamePaused = false;
-                    lastTime = performance.now();
+                    lastTimestamp = performance.now();
                     requestAnimationFrame(gameLoop);
                 };
                 container.appendChild(card);
@@ -692,7 +712,6 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.save();
-            // 套用 2 倍放大鏡頭（讓畫面放大、視野更接近主角）
             ctx.scale(2.0, 2.0);
 
             let scaledWidth = canvas.width / 2.0;
@@ -700,20 +719,17 @@
             let camX = player.worldX - scaledWidth / 2;
             let camY = player.worldY - scaledHeight / 2;
 
-            // 背景網格
-            ctx.strokeStyle = '#222244';
-            ctx.lineWidth = 1;
-            let gridSize = 50;
-            let offsetX = -camX % gridSize;
-            let offsetY = -camY % gridSize;
-            ctx.beginPath();
-            for (let x = offsetX; x < scaledWidth; x += gridSize) {
-                ctx.moveTo(x, 0); ctx.lineTo(x, scaledHeight);
+            // 繪製無限拼貼背景草地圖
+            ctx.save();
+            if (bgPattern) {
+                ctx.fillStyle = bgPattern;
+                ctx.translate(-camX, -camY);
+                ctx.fillRect(camX, camY, scaledWidth, scaledHeight);
+            } else {
+                ctx.fillStyle = '#a8d5ba';
+                ctx.fillRect(0, 0, scaledWidth, scaledHeight);
             }
-            for (let y = offsetY; y < scaledHeight; y += gridSize) {
-                ctx.moveTo(0, y); ctx.lineTo(scaledWidth, y);
-            }
-            ctx.stroke();
+            ctx.restore();
 
             // 經驗晶體
             gems.forEach(g => {
@@ -742,14 +758,14 @@
                 }
             });
 
-            // 繪製主角圖片 (放大顯示比例，避免變形壓縮)
+            // 繪製主角圖片
             let playerScreenX = scaledWidth / 2;
             let playerScreenY = scaledHeight / 2;
             
             let currentImg = player.isAttacking ? playerAtkImage : playerIdleImages[player.currentFrame];
 
             if (currentImg && currentImg.complete && currentImg.naturalWidth !== 0) {
-                const renderSize = 64; // 放大渲染尺寸，讓角色更清楚
+                const renderSize = 64;
                 ctx.save();
                 ctx.translate(playerScreenX, playerScreenY);
                 
@@ -771,6 +787,20 @@
                 ctx.arc(playerScreenX, playerScreenY, player.radius, 0, Math.PI * 2);
                 ctx.fill();
             }
+
+            // 主角下方的血量條
+            let hpBarWidth = 40;
+            let hpBarHeight = 6;
+            let hpPercent = Math.max(0, player.hp / player.maxHp);
+            let barX = playerScreenX - hpBarWidth / 2;
+            let barY = playerScreenY + player.radius + 8;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(barX - 1, barY - 1, hpBarWidth + 2, hpBarHeight + 2);
+            ctx.fillStyle = '#ff416c';
+            ctx.fillRect(barX, barY, hpBarWidth, hpBarHeight);
+            ctx.fillStyle = '#4cd137';
+            ctx.fillRect(barX, barY, hpBarWidth * hpPercent, hpBarHeight);
 
             // 旋風劍刃
             let bladeW = weapons.find(w => w.id === 'blade');
@@ -825,9 +855,9 @@
                 ctx.fillText(ft.text, screenX, screenY);
             });
 
-            ctx.restore(); // 結束 2 倍縮放
+            ctx.restore();
 
-            // 虛擬搖桿 (維持在螢幕原座標)
+            // 虛擬搖桿
             if (joystick.active) {
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 4;
