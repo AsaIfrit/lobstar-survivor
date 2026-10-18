@@ -71,7 +71,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.65);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -92,11 +92,12 @@
         }
         p {
             font-size: 1.1rem;
-            color: #aaa;
+            color: #ddd;
             margin-bottom: 30px;
             text-align: center;
             max-width: 600px;
             line-height: 1.5;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
         }
         .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -152,6 +153,7 @@
             font-size: 0.95rem;
             color: #ccc;
             margin-bottom: 0;
+            text-shadow: none;
         }
     </style>
 </head>
@@ -272,6 +274,27 @@
         let gameTime = 0;
         let killCount = 0;
         let chosenInitialSkill = 'fireball';
+
+        // 標題畫面的動態裝飾變數（背景朝左下角滑動、敵人群隨機漫步）
+        let titleBgOffsetX = 0;
+        let titleBgOffsetY = 0;
+        let titlePreviewEnemies = [];
+
+        function initTitlePreviewEnemies() {
+            titlePreviewEnemies = [];
+            for (let i = 0; i < 15; i++) {
+                titlePreviewEnemies.push({
+                    x: (Math.random() - 0.5) * 1500,
+                    y: (Math.random() - 0.5) * 1500,
+                    radius: 14 + Math.random() * 10,
+                    color: Math.random() < 0.6 ? '#ff5252' : (Math.random() < 0.8 ? '#ffeb3b' : '#ab47bc'),
+                    vx: (Math.random() - 0.5) * 1.2,
+                    vy: (Math.random() - 0.5) * 1.2,
+                    animTimer: Math.random() * 100
+                });
+            }
+        }
+        initTitlePreviewEnemies();
 
         let player = {
             worldX: 0,
@@ -436,7 +459,13 @@
         let lastTimestamp = 0;
 
         function gameLoop(timestamp) {
-            if (!gameRunning) return;
+            // 如果遊戲尚未開始（在開始畫面或技能選擇畫面），保持渲染背景動畫
+            if (!gameRunning) {
+                renderTitleBackground();
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
             if (!lastTimestamp) lastTimestamp = timestamp;
             let frameTime = (timestamp - lastTimestamp) / 1000;
             lastTimestamp = timestamp;
@@ -459,6 +488,62 @@
                 requestAnimationFrame(gameLoop);
             }
         }
+
+        // 遊戲開始前的動態背景渲染（背景朝左下角滑動、敵人群隨機移動）
+        function renderTitleBackground() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.scale(cameraZoom, cameraZoom);
+
+            let scaledWidth = canvas.width / cameraZoom;
+            let scaledHeight = canvas.height / cameraZoom;
+
+            // 背景朝左下角持續滑動（X 往左減、Y 往下增）
+            titleBgOffsetX -= 0.8;
+            titleBgOffsetY += 0.8;
+
+            ctx.save();
+            ctx.translate(titleBgOffsetX, titleBgOffsetY);
+            if (bgPattern) {
+                ctx.fillStyle = bgPattern;
+                ctx.fillRect(-1000, -1000, scaledWidth + 2000, scaledHeight + 2000);
+            } else {
+                ctx.fillStyle = '#a8d5ba';
+                ctx.fillRect(0, 0, scaledWidth, scaledHeight);
+            }
+            ctx.restore();
+
+            // 標題畫面上的敵人群隨機漫步
+            titlePreviewEnemies.forEach(te => {
+                te.x += te.vx;
+                te.y += te.vy;
+                if (Math.random() < 0.02) {
+                    te.vx = (Math.random() - 0.5) * 1.5;
+                    te.vy = (Math.random() - 0.5) * 1.5;
+                }
+
+                let screenX = (scaledWidth / 2) + te.x;
+                let screenY = (scaledHeight / 2) + te.y;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.beginPath();
+                ctx.ellipse(screenX, screenY + te.radius * 0.5, te.radius * 0.8, te.radius * 0.35, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                let size = te.radius * 1.8;
+                ctx.fillStyle = te.color;
+                ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
+                ctx.strokeStyle = '#4a2e18';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
+            });
+
+            ctx.restore();
+        }
+
+        // 首次載入時啟動畫面迴圈
+        requestAnimationFrame(gameLoop);
 
         function update(dt) {
             gameTime += dt;
@@ -571,7 +656,6 @@
                                     e.burnTimer = 0;
                                     finalDmg *= 2;
 
-                                    // 強烈蒸發大水霧特效
                                     for (let s = 0; s < 18; s++) {
                                         particles.push({
                                             type: 'smoke',
@@ -620,7 +704,7 @@
                 checkEnemyDeaths();
             }
 
-            // 敵人更新、燃燒、潮濕減速、定身控制與被炸飛跳躍處理
+            // 敵人更新、燃燒、潮濕滑落水滴、定身控制與被炸飛跳躍處理
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
 
@@ -628,7 +712,6 @@
                     e.burnTimer -= dt;
                     e.burnTickTimer += dt;
 
-                    // 燃燒時每幀隨機冒出火花粒子
                     if (Math.random() < 0.4) {
                         particles.push({
                             type: 'pixelExplosion',
@@ -1277,19 +1360,34 @@
                 }
             });
 
+            // 道具渲染（心型道具改為像素愛心美術風格）
             items.forEach(it => {
                 let screenX = it.x - camX;
                 let screenY = it.y - camY;
                 if (screenX >= -20 && screenX <= scaledWidth + 20 && screenY >= -20 && screenY <= scaledHeight + 20) {
-                    ctx.fillStyle = it.type === 'heart' ? '#ff416c' : '#00dbde';
-                    ctx.fillRect(screenX - 8, screenY - 8, 16, 16);
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeRect(screenX - 8, screenY - 8, 16, 16);
+                    if (it.type === 'heart') {
+                        // 像素美術風格愛心繪製
+                        ctx.fillStyle = '#ff3366';
+                        ctx.fillRect(screenX - 6, screenY - 6, 4, 4);
+                        ctx.fillRect(screenX + 2, screenY - 6, 4, 4);
+                        ctx.fillRect(screenX - 8, screenY - 2, 16, 6);
+                        ctx.fillRect(screenX - 6, screenY + 4, 12, 4);
+                        ctx.fillRect(screenX - 4, screenY + 8, 8, 2);
+                        ctx.fillRect(screenX - 2, screenY + 10, 4, 2);
+                        // 高光
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(screenX - 5, screenY - 5, 2, 2);
+                    } else {
+                        ctx.fillStyle = '#00dbde';
+                        ctx.fillRect(screenX - 8, screenY - 8, 16, 16);
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(screenX - 8, screenY - 8, 16, 16);
+                    }
                 }
             });
 
-            // 敵人渲染（含升級版明顯的燃燒、潮濕、感電特效）
+            // 敵人渲染（含潮濕狀態下多顆水滴在敵人圖層表面滑落特效）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -1306,7 +1404,6 @@
                     ctx.lineWidth = 2;
                     ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
 
-                    // 更明顯的燃燒特效（雙層火焰方塊跳動）
                     if (e.burnTimer > 0) {
                         let flamePulse = Math.sin(gameTime * 18) * 3;
                         ctx.fillStyle = '#ff3d00';
@@ -1315,16 +1412,19 @@
                         ctx.fillRect(screenX - size / 2 - 4, screenY - size / 2 - 10 + flamePulse, 6, 6);
                     }
 
-                    // 更明顯的潮濕特效（大型藍色晶瑩水滴）
+                    // 潮濕特效：多顆水滴在敵人圖層上由上往下循環滑落
                     if (e.wetTimer > 0) {
                         ctx.fillStyle = '#00b0ff';
-                        let dropOffset = Math.sin(gameTime * 12) * 4;
-                        ctx.fillRect(screenX + size / 2 - 8, screenY - size / 2 - 16 + dropOffset, 6, 8);
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(screenX + size / 2 - 7, screenY - size / 2 - 15 + dropOffset, 2, 3);
+                        let dropCycle1 = ((gameTime * 35) % (size * 0.8)) - (size * 0.4);
+                        let dropCycle2 = (((gameTime * 35) + 18) % (size * 0.8)) - (size * 0.4);
+                        let dropCycle3 = (((gameTime * 35) + 32) % (size * 0.8)) - (size * 0.4);
+
+                        // 在敵人本體圖層內繪製滑落的水滴像素
+                        ctx.fillRect(screenX - size * 0.2, screenY + dropCycle1, 3, 5);
+                        ctx.fillRect(screenX + size * 0.15, screenY + dropCycle2, 2, 4);
+                        ctx.fillRect(screenX - size * 0.05, screenY + dropCycle3, 3, 5);
                     }
 
-                    // 更明顯的感電特效（高頻閃爍亮藍色電流電網）
                     if (e.stunTimer > 0) {
                         ctx.fillStyle = '#00ffff';
                         let sparkTick = Math.floor(gameTime * 40) % 2;
@@ -1380,7 +1480,7 @@
                 }
             }
 
-            // 主角下方的血條（小巧精緻的血條顯示於角色下方）
+            // 主角下方血條
             let hpRatio = Math.max(0, player.hp / player.maxHp);
             let barW = 44;
             let barH = 6;
