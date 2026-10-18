@@ -179,8 +179,15 @@
     <!-- 開始遊戲畫面 -->
     <div id="startScreen" class="overlay">
         <h1>Lobstar-survivor</h1>
-        <p>運用元素精靈的力量，在無盡的魔物浪潮中生存下去！<br>使用 <b>WASD / 方向鍵</b> 移動，或在手機上使用<b>虛擬搖桿</b>滑動。</p>
+        <p>運用元素精靈的力量，在無盡的魔物浪潮中生存下去！<br>使用 <b>WASD / 方向鍵</b> 移動，按下 <b>ESC</b> 暫停遊戲。</p>
         <button class="btn" onclick="startGame()">開始冒險</button>
+    </div>
+
+    <!-- 暫停畫面 -->
+    <div id="pauseScreen" class="overlay hidden">
+        <h1>遊戲暫停</h1>
+        <p>休息一下，準備好隨時繼續冒險！</p>
+        <button class="btn" onclick="togglePause()">繼續遊戲</button>
     </div>
 
     <!-- 升級三選一畫面 -->
@@ -274,13 +281,32 @@
         let bullets = [];
         let particles = [];
         let gems = [];
+        let items = []; // 掉落道具 (心子、磁鐵、炸彈)
         let floatTexts = [];
 
         let keys = {};
         let joystick = { active: false, id: null, startX: 0, startY: 0, x: 0, y: 0 };
 
-        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'Escape' && gameRunning && document.getElementById('upgradeScreen').classList.contains('hidden')) {
+                togglePause();
+            }
+        });
         window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function togglePause() {
+            if (!gameRunning) return;
+            gamePaused = !gamePaused;
+            let pauseScreen = document.getElementById('pauseScreen');
+            if (gamePaused) {
+                pauseScreen.classList.remove('hidden');
+            } else {
+                pauseScreen.classList.add('hidden');
+                lastTimestamp = performance.now();
+                requestAnimationFrame(gameLoop);
+            }
+        }
 
         window.addEventListener('pointerdown', e => {
             if (!gameRunning || gamePaused) return;
@@ -342,6 +368,7 @@
             bullets = [];
             particles = [];
             gems = [];
+            items = [];
             floatTexts = [];
 
             weapons.forEach(w => {
@@ -388,7 +415,9 @@
                 render();
             }
 
-            requestAnimationFrame(gameLoop);
+            if (gameRunning && !gamePaused) {
+                requestAnimationFrame(gameLoop);
+            }
         }
 
         function update(dt) {
@@ -470,7 +499,7 @@
                 }
             });
 
-            // 防護水環（水環攻擊判定與蒸發反應）
+            // 防護水環攻擊與蒸發反應判定
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -499,10 +528,23 @@
                                 let baseDmg = (bladeW.damage + bladeW.level * 4) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
 
-                                // 蒸發反應判定：如果在燃燒狀態被防護水環攻擊
+                                // 蒸發反應
                                 if (e.burnTimer > 0) {
-                                    e.burnTimer = 0; // 解除燃燒狀態
-                                    finalDmg *= 2; // 2倍傷害
+                                    e.burnTimer = 0;
+                                    finalDmg *= 2;
+
+                                    // 產生白色煙霧效果粒子
+                                    for (let s = 0; s < 12; s++) {
+                                        particles.push({
+                                            type: 'smoke',
+                                            worldX: e.x,
+                                            worldY: e.y,
+                                            vx: (Math.random() - 0.5) * 3,
+                                            vy: (Math.random() - 0.5) * 3,
+                                            life: 0.5,
+                                            color: '#ffffff'
+                                        });
+                                    }
 
                                     let outAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX) + (Math.random() - 0.5) * 0.5;
                                     floatTexts.push({
@@ -540,22 +582,30 @@
                         }
                     });
                 }
-                for (let i = enemies.length - 1; i >= 0; i--) {
-                    if (enemies[i].hp <= 0) {
-                        killCount++;
-                        gems.push({ x: enemies[i].x, y: enemies[i].y, value: enemies[i].expVal });
-                        enemies.splice(i, 1);
-                    }
-                }
+                checkEnemyDeaths();
             }
 
-            // 敵人更新（包含燃燒狀態計時與每秒 2% 最大生命值傷害）
+            // 敵人更新與燃燒火星飄散
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
 
                 if (e.burnTimer > 0) {
                     e.burnTimer -= dt;
                     e.burnTickTimer += dt;
+
+                    // 燃燒時身上向上飄散火星
+                    if (Math.random() < 0.5) {
+                        particles.push({
+                            type: 'spark',
+                            worldX: e.x + (Math.random() - 0.5) * e.radius,
+                            worldY: e.y + (Math.random() - 0.5) * e.radius,
+                            vx: (Math.random() - 0.5) * 0.8,
+                            vy: -1.5 - Math.random() * 1.0, // 向上飄散
+                            life: 0.4,
+                            color: Math.random() > 0.5 ? '#ff7043' : '#ffca28'
+                        });
+                    }
+
                     if (e.burnTickTimer >= 1.0) {
                         e.burnTickTimer = 0;
                         let burnDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
@@ -638,7 +688,7 @@
                 }
             }
 
-            // 子彈更新（烈焰球使敵人燃燒）
+            // 子彈更新
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -664,10 +714,26 @@
                         let finalDmg = Math.floor(b.damage * powerBonus);
                         e.hp -= finalDmg;
 
-                        // 烈焰球命中賦予燃燒狀態（持續 2 秒，再次受到刷新時間）
+                        // 烈焰球燃燒狀態與「燃燒」文字提示
                         if (b.id === 'fireball') {
+                            let wasBurning = e.burnTimer > 0;
                             e.burnTimer = 2.0;
                             e.burnTickTimer = 0;
+
+                            if (!wasBurning) {
+                                let outAngle = (Math.random() - 0.5) * Math.PI;
+                                floatTexts.push({
+                                    worldX: e.x,
+                                    worldY: e.y - 15,
+                                    vx: Math.cos(outAngle) * 1.2,
+                                    vy: -2.5,
+                                    gravity: 0.15,
+                                    text: '燃燒',
+                                    color: '#ff7043',
+                                    life: 1.0,
+                                    maxLife: 1.0
+                                });
+                            }
                         }
                         
                         let outAngle = Math.atan2(e.y - b.y, e.x - b.x) + (Math.random() - 0.5) * 0.5;
@@ -689,7 +755,7 @@
 
                         if (e.hp <= 0) {
                             killCount++;
-                            gems.push({ x: e.x, y: e.y, value: e.expVal });
+                            handleEnemyDeath(e);
                             enemies.splice(j, 1);
                         }
 
@@ -705,9 +771,12 @@
                 }
             }
 
+            checkEnemyDeaths();
+
+            // 粒子更新
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                if (p.type === 'spark') {
+                if (p.type === 'spark' || p.type === 'smoke') {
                     p.worldX += p.vx;
                     p.worldY += p.vy;
                     p.life -= dt;
@@ -718,6 +787,7 @@
                 }
             }
 
+            // 浮動文字更新
             for (let i = floatTexts.length - 1; i >= 0; i--) {
                 let ft = floatTexts[i];
                 ft.worldX += ft.vx;
@@ -727,7 +797,9 @@
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
 
+            // 經驗晶體與掉落道具吸收邏輯
             let pickupRangeBase = player.pickupRadius * (1 + passives.find(p => p.id === 'magnet').level * 0.3);
+            
             for (let i = gems.length - 1; i >= 0; i--) {
                 let g = gems[i];
                 let dist = Math.hypot(player.worldX - g.x, player.worldY - g.y);
@@ -741,6 +813,67 @@
                         gems.splice(i, 1);
                     }
                 }
+            }
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                let it = items[i];
+                let dist = Math.hypot(player.worldX - it.x, player.worldY - it.y);
+                if (dist < pickupRangeBase) {
+                    let angle = Math.atan2(player.worldY - it.y, player.worldX - it.x);
+                    it.x += Math.cos(angle) * 8;
+                    it.y += Math.sin(angle) * 8;
+
+                    if (dist < player.radius + 15) {
+                        applyItemEffect(it.type);
+                        items.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function checkEnemyDeaths() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].hp <= 0) {
+                    killCount++;
+                    handleEnemyDeath(enemies[i]);
+                    enemies.splice(i, 1);
+                }
+            }
+        }
+
+        function handleEnemyDeath(e) {
+            gems.push({ x: e.x, y: e.y, value: e.expVal });
+
+            // 5% 機率掉落道具 (心子、磁鐵、炸彈)
+            if (Math.random() < 0.05) {
+                let randType = Math.random();
+                let type = 'heart';
+                if (randType < 0.33) type = 'heart';
+                else if (randType < 0.66) type = 'magnet';
+                else type = 'bomb';
+
+                items.push({ x: e.x, y: e.y, type: type });
+            }
+        }
+
+        function applyItemEffect(type) {
+            if (type === 'heart') {
+                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5);
+                updateHUD();
+                floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '+50% HP', color: '#ff416c', life: 1.0, maxLife: 1.0 });
+            } else if (type === 'magnet') {
+                // 吸引全場所有經驗晶體與道具
+                gems.forEach(g => { g.x = player.worldX; g.y = player.worldY; });
+                items.forEach(it => { it.x = player.worldX; it.y = player.worldY; });
+                floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '全場吸收!', color: '#00dbde', life: 1.0, maxLife: 1.0 });
+            } else if (type === 'bomb') {
+                // 消滅場上所有敵人
+                enemies.forEach(e => {
+                    killCount++;
+                    gems.push({ x: e.x, y: e.y, value: e.expVal });
+                    floatTexts.push({ worldX: e.x, worldY: e.y, vx: 0, vy: -2, gravity: 0.1, text: 'BOOM!', color: '#ffca28', life: 1.0, maxLife: 1.0 });
+                });
+                enemies = [];
             }
         }
 
@@ -867,7 +1000,7 @@
 
                         if (e.hp <= 0) {
                             killCount++;
-                            gems.push({ x: e.x, y: e.y, value: e.expVal });
+                            handleEnemyDeath(e);
                         }
                         hitCount++;
                     }
@@ -961,6 +1094,7 @@
             }
             ctx.restore();
 
+            // 經驗晶體
             gems.forEach(g => {
                 let screenX = g.x - camX;
                 let screenY = g.y - camY;
@@ -973,7 +1107,20 @@
                 }
             });
 
-            // 繪製敵人（若處於燃燒狀態，身周會帶有橘紅色火焰燃燒特效）
+            // 掉落道具 (❤愛心, 🧲磁鐵, 💣炸彈)
+            items.forEach(it => {
+                let screenX = it.x - camX;
+                let screenY = it.y - camY;
+                if (screenX >= -20 && screenX <= scaledWidth + 20 && screenY >= -20 && screenY <= scaledHeight + 20) {
+                    ctx.fillStyle = it.type === 'heart' ? '#ff416c' : (it.type === 'magnet' ? '#00dbde' : '#ffca28');
+                    ctx.fillRect(screenX - 8, screenY - 8, 16, 16);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(screenX - 8, screenY - 8, 16, 16);
+                }
+            });
+
+            // 敵人繪製
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -990,7 +1137,6 @@
                     ctx.lineWidth = 2;
                     ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
 
-                    // 燃燒狀態特效指示
                     if (e.burnTimer > 0) {
                         ctx.fillStyle = '#ff3d00';
                         ctx.fillRect(screenX - size / 2 - 4, screenY - size / 2 - 8, 8, 8);
@@ -1069,6 +1215,7 @@
             ctx.fillStyle = '#4cd137';
             ctx.fillRect(barX, barY, hpBarWidth * hpPercent, hpBarHeight);
 
+            // 防護水環特效
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -1095,12 +1242,16 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
+            // 粒子特效渲染 (火星、閃電、煙霧)
             particles.forEach(p => {
+                let sx = p.worldX - camX;
+                let sy = p.worldY - camY;
                 if (p.type === 'spark') {
-                    let sx = p.worldX - camX;
-                    let sy = p.worldY - camY;
                     ctx.fillStyle = p.color;
                     ctx.fillRect(sx - 2, sy - 2, 4, 4);
+                } else if (p.type === 'smoke') {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.fillRect(sx - 3, sy - 3, 6, 6);
                 } else if (p.type === 'lightning') {
                     let sx1 = p.worldX1 - camX;
                     let sy1 = p.worldY1 - camY;
@@ -1115,24 +1266,22 @@
                 }
             });
 
-            // 傷害數字與「蒸發」字體渲染（2倍大小、黑色外框線、1秒生命週期）
+            // 傷害與狀態文字渲染
             floatTexts.forEach(ft => {
                 let screenX = ft.worldX - camX;
                 let screenY = ft.worldY - camY;
-                let alpha = Math.max(0, ft.life / ft.maxLife); // 1秒內從1漸變成0
+                let alpha = Math.max(0, ft.life / ft.maxLife);
                 
                 ctx.save();
                 ctx.globalAlpha = alpha;
-                ctx.font = 'bold 26px sans-serif'; // 2倍大小
+                ctx.font = 'bold 26px sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'alphabetic';
 
-                // 黑色外框線（描邊）
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 4;
                 ctx.strokeText(ft.text, screenX, screenY);
 
-                // 內部文字顏色
                 ctx.fillStyle = ft.color;
                 ctx.fillText(ft.text, screenX, screenY);
                 ctx.restore();
