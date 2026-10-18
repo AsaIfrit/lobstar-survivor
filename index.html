@@ -644,7 +644,7 @@
                 }
             });
 
-            // 防護水環攻擊、附加「潮濕」狀態與持續飛散水花粒子
+            // 防護水環攻擊與傷害計算（帶有受擊擊退與死亡漸變過渡）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let bladeCount = 2 + bladeW.level;
@@ -653,7 +653,6 @@
                     let bx = player.worldX + Math.cos(angle) * 75;
                     let by = player.worldY + Math.sin(angle) * 75;
 
-                    // 防護水環軌跡水花粒子
                     if (Math.random() < 0.4) {
                         particles.push({
                             type: 'smoke',
@@ -668,10 +667,16 @@
                     }
 
                     enemies.forEach(e => {
+                        if (e.isDying) return; // 已經死掉的敵人不再受擊
                         if (Math.hypot(bx - e.x, by - e.y) < e.radius + 15) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
                                 playHitSound();
+
+                                // 受擊擊退（朝外推開）
+                                let pushAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
+                                e.x += Math.cos(pushAngle) * 8;
+                                e.y += Math.sin(pushAngle) * 8;
 
                                 e.wetTimer = 3.0;
 
@@ -711,6 +716,9 @@
                                 }
 
                                 e.hp -= finalDmg;
+                                if (e.hp <= 0 && !e.isDying) {
+                                    startEnemyDeath(e);
+                                }
 
                                 let outAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX) + (Math.random() - 0.5) * 0.5;
                                 floatTexts.push({
@@ -734,6 +742,16 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
 
+                // 死亡中的敵人：執行一邊震動一邊漸變消失的動畫
+                if (e.isDying) {
+                    e.deathTimer -= dt;
+                    if (e.deathTimer <= 0) {
+                        handleEnemyDeath(e);
+                        enemies.splice(i, 1);
+                    }
+                    continue;
+                }
+
                 if (e.burnTimer > 0) {
                     e.burnTimer -= dt;
                     e.burnTickTimer += dt;
@@ -756,6 +774,9 @@
                         playHitSound();
                         let burnDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
                         e.hp -= burnDmg;
+                        if (e.hp <= 0 && !e.isDying) {
+                            startEnemyDeath(e);
+                        }
 
                         let outAngle = (Math.random() - 0.5) * Math.PI;
                         floatTexts.push({
@@ -851,14 +872,13 @@
 
             checkEnemyDeaths();
 
-            // 子彈更新（烈焰球飛行途徑伴隨粒子飛散）
+            // 子彈更新與受擊擊退
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
                 b.y += b.vy;
                 b.life -= dt;
 
-                // 火球飛行軌跡粒子飛散
                 if (b.id === 'fireball' && Math.random() < 0.6) {
                     particles.push({
                         type: 'pixelExplosion',
@@ -874,8 +894,16 @@
 
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     let e = enemies[j];
+                    if (e.isDying) continue;
+
                     if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
                         playHitSound();
+
+                        // 子彈命中擊退
+                        let pushAngle = Math.atan2(e.y - b.y, e.x - b.x);
+                        e.x += Math.cos(pushAngle) * 10;
+                        e.y += Math.sin(pushAngle) * 10;
+
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor(b.damage * powerBonus);
 
@@ -932,6 +960,9 @@
                         }
 
                         e.hp -= finalDmg;
+                        if (e.hp <= 0 && !e.isDying) {
+                            startEnemyDeath(e);
+                        }
                         
                         let outAngle = Math.atan2(e.y - b.y, e.x - b.x) + (Math.random() - 0.5) * 0.5;
                         floatTexts.push({
@@ -945,12 +976,6 @@
                             life: 1.0,
                             maxLife: 1.0
                         });
-
-                        if (e.hp <= 0) {
-                            killCount++;
-                            handleEnemyDeath(e);
-                            enemies.splice(j, 1);
-                        }
 
                         if (!b.pierce) {
                             bullets.splice(i, 1);
@@ -993,7 +1018,6 @@
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
 
-            // 經驗與道具收集（支援磁鐵全場吸附）
             let pickupRangeBase = player.pickupRadius * (1 + passives.find(p => p.id === 'magnet').level * 0.3);
             
             for (let i = gems.length - 1; i >= 0; i--) {
@@ -1001,7 +1025,7 @@
                 let dist = Math.hypot(player.worldX - g.x, player.worldY - g.y);
                 if (g.isGlobalAttracted || dist < pickupRangeBase) {
                     let angle = Math.atan2(player.worldY - g.y, player.worldX - g.x);
-                    g.x += Math.cos(angle) * 12; // 磁鐵吸引時高速飛向主角
+                    g.x += Math.cos(angle) * 12;
                     g.y += Math.sin(angle) * 12;
 
                     if (dist < player.radius + 15) {
@@ -1027,14 +1051,14 @@
             }
         }
 
+        function startEnemyDeath(e) {
+            e.isDying = true;
+            e.deathTimer = 0.35; // 死亡漸變震動動畫持續 0.35 秒
+            killCount++;
+        }
+
         function checkEnemyDeaths() {
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                if (enemies[i].hp <= 0) {
-                    killCount++;
-                    handleEnemyDeath(enemies[i]);
-                    enemies.splice(i, 1);
-                }
-            }
+            // 此處保留以防直接歸零呼叫
         }
 
         function handleEnemyDeath(e) {
@@ -1052,7 +1076,6 @@
                 updateHUD();
                 floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '+50% HP', color: '#ff416c', life: 1.0, maxLife: 1.0 });
             } else if (type === 'magnet') {
-                // 吃到磁鐵：讓場上所有經驗寶石與道具全面標記為全場吸附狀態！
                 gems.forEach(g => g.isGlobalAttracted = true);
                 items.forEach(it => it.isGlobalAttracted = true);
                 floatTexts.push({ worldX: player.worldX, worldY: player.worldY - 20, vx: 0, vy: -2, gravity: 0.1, text: '全場磁吸!', color: '#00dbde', life: 1.0, maxLife: 1.0 });
@@ -1107,7 +1130,9 @@
                 isKnockbackJumping: false,
                 knockbackJumpProgress: 0,
                 knockbackVx: 0,
-                knockbackVy: 0
+                knockbackVy: 0,
+                isDying: false,
+                deathTimer: 0
             });
         }
 
@@ -1117,6 +1142,7 @@
             let target = null;
             let minDist = Infinity;
             enemies.forEach(e => {
+                if (e.isDying) return;
                 let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                 if (dist < minDist && dist < weapon.range * 1.5) {
                     minDist = dist;
@@ -1160,9 +1186,16 @@
                 let lastHitY = player.worldY;
 
                 enemies.forEach(e => {
+                    if (e.isDying) return;
                     let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                     if (hitCount < affectedCount && dist < weapon.range) {
                         playHitSound();
+
+                        // 雷電命中擊退
+                        let pushAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
+                        e.x += Math.cos(pushAngle) * 8;
+                        e.y += Math.sin(pushAngle) * 8;
+
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor((weapon.damage + weapon.level * 10) * powerBonus);
 
@@ -1210,10 +1243,14 @@
 
                             let overloadRadius = 100;
                             enemies.forEach(nearE => {
+                                if (nearE.isDying) return;
                                 let distToTrigger = Math.hypot(e.x - nearE.x, e.y - nearE.y);
                                 if (distToTrigger < overloadRadius) {
                                     if (nearE !== e) {
                                         nearE.hp -= Math.floor(finalDmg * 0.75);
+                                        if (nearE.hp <= 0 && !nearE.isDying) {
+                                            startEnemyDeath(nearE);
+                                        }
                                     }
 
                                     let flyAngle = Math.atan2(nearE.y - e.y, nearE.x - e.x);
@@ -1259,6 +1296,9 @@
                         }
 
                         e.hp -= finalDmg;
+                        if (e.hp <= 0 && !e.isDying) {
+                            startEnemyDeath(e);
+                        }
                         
                         let outAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX) + (Math.random() - 0.5) * 0.5;
                         floatTexts.push({
@@ -1287,8 +1327,6 @@
                         hitCount++;
                     }
                 });
-
-                checkEnemyDeaths();
             }
         }
 
@@ -1389,7 +1427,6 @@
                 }
             });
 
-            // 道具渲染（磁鐵改為像素美術風格馬蹄形磁鐵）
             items.forEach(it => {
                 let screenX = it.x - camX;
                 let screenY = it.y - camY;
@@ -1405,12 +1442,10 @@
                         ctx.fillStyle = '#ffffff';
                         ctx.fillRect(screenX - 5, screenY - 5, 2, 2);
                     } else if (it.type === 'magnet') {
-                        // 像素美術馬蹄形磁鐵繪製
-                        ctx.fillStyle = '#ff3333'; // 紅色本體
+                        ctx.fillStyle = '#ff3333';
                         ctx.fillRect(screenX - 8, screenY - 8, 4, 12);
                         ctx.fillRect(screenX + 4, screenY - 8, 4, 12);
                         ctx.fillRect(screenX - 8, screenY - 8, 16, 4);
-                        // 磁極（藍色與白色）
                         ctx.fillStyle = '#29b6f6';
                         ctx.fillRect(screenX - 8, screenY + 4, 4, 4);
                         ctx.fillRect(screenX + 4, screenY + 4, 4, 4);
@@ -1421,10 +1456,23 @@
                 }
             });
 
+            // 敵人渲染（支援死亡震動與漸變消失動畫）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
+
+                if (e.isDying) {
+                    // 死亡震動偏移
+                    screenX += (Math.random() - 0.5) * 6;
+                    screenY += (Math.random() - 0.5) * 6;
+                }
+
                 if (screenX >= -50 && screenX <= scaledWidth + 50 && screenY >= -50 && screenY <= scaledHeight + 50) {
+                    ctx.save();
+                    if (e.isDying) {
+                        ctx.globalAlpha = Math.max(0, e.deathTimer / 0.35); // 漸變淡出
+                    }
+
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
                     ctx.beginPath();
                     ctx.ellipse(e.x - camX, (e.y - camY) + e.radius * 0.5, e.radius * 0.8, e.radius * 0.35, 0, 0, Math.PI * 2);
@@ -1469,6 +1517,8 @@
                         ctx.fillRect(screenX - cageBox - 2, screenY + cageBox - 2, 4, 4);
                         ctx.fillRect(screenX + cageBox - 2, screenY + cageBox - 2, 4, 4);
                     }
+
+                    ctx.restore();
                 }
             });
 
