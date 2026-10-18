@@ -198,7 +198,7 @@
             </div>
             <div class="upgrade-card" onclick="startWithSkill('lightning')">
                 <h3>閃電鏈</h3>
-                <p>釋放鋸齒閃電攻擊多重敵人，可與燃燒觸發「超載」、與潮濕觸發「感電」。</p>
+                <p>釋放像素鋸齒閃電攻擊多重敵人，可與燃燒觸發「超載」、與潮濕觸發「感電」。</p>
             </div>
         </div>
     </div>
@@ -532,6 +532,9 @@
 
             weapons.forEach(weapon => {
                 if (weapon.level <= 0) return;
+                // 如果畫面中沒有敵人，則不發動烈焰球與閃電鏈
+                if ((weapon.id === 'fireball' || weapon.id === 'lightning') && enemies.length === 0) return;
+
                 weapon.timer += dt;
                 if (weapon.timer >= weapon.cd) {
                     weapon.timer = 0;
@@ -822,13 +825,13 @@
             // 粒子更新
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                if (p.type === 'spark' || p.type === 'smoke') {
+                if (p.type === 'spark' || p.type === 'smoke' || p.type === 'pixelExplosion') {
                     p.worldX += p.vx;
                     p.worldY += p.vy;
                     p.life -= dt;
                     if (p.life <= 0) particles.splice(i, 1);
                 } else if (p.type === 'lightning') {
-                    p.life -= 0.016;
+                    p.life -= 0.02;
                     if (p.life <= 0) particles.splice(i, 1);
                 }
             }
@@ -877,7 +880,6 @@
             }
         }
 
-        // 統一檢查並處理所有血量歸零的敵人（含燃燒持續傷害、防護水環、閃電鏈等）
         function checkEnemyDeaths() {
             for (let i = enemies.length - 1; i >= 0; i--) {
                 if (enemies[i].hp <= 0) {
@@ -1033,6 +1035,22 @@
                                 maxLife: 1.0
                             });
 
+                            // 產生像素風爆炸粒子特效
+                            for (let p = 0; p < 16; p++) {
+                                let pAngle = Math.random() * Math.PI * 2;
+                                let pSpeed = 1 + Math.random() * 3;
+                                particles.push({
+                                    type: 'pixelExplosion',
+                                    worldX: e.x,
+                                    worldY: e.y,
+                                    vx: Math.cos(pAngle) * pSpeed,
+                                    vy: Math.sin(pAngle) * pSpeed,
+                                    life: 0.4,
+                                    color: Math.random() > 0.5 ? '#ff9800' : '#ffeb3b',
+                                    size: 4 + Math.floor(Math.random() * 4)
+                                });
+                            }
+
                             enemies.forEach(nearE => {
                                 if (nearE !== e && Math.hypot(e.x - nearE.x, e.y - nearE.y) < 80) {
                                     nearE.hp -= Math.floor(finalDmg * 0.75);
@@ -1089,7 +1107,7 @@
                             startY: lastHitY, 
                             targetX: e.x, 
                             targetY: e.y, 
-                            life: 0.45 
+                            life: 0.35 
                         });
 
                         lastHitX = e.x;
@@ -1098,7 +1116,6 @@
                     }
                 });
 
-                // 閃電鏈攻擊結束後，統一檢查並結算所有被電死（含超載波及傷害）的敵人
                 checkEnemyDeaths();
             }
         }
@@ -1212,6 +1229,7 @@
                 }
             });
 
+            // 敵人繪製（含像素風潮濕水滴、感電電流特效）
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -1232,13 +1250,29 @@
                         ctx.fillStyle = '#ff3d00';
                         ctx.fillRect(screenX - size / 2 - 4, screenY - size / 2 - 8, 8, 8);
                     }
+
+                    // 像素風潮濕水滴特效
                     if (e.wetTimer > 0) {
                         ctx.fillStyle = '#00b0ff';
-                        ctx.fillRect(screenX + size / 2 - 4, screenY - size / 2 - 8, 8, 8);
+                        let dropOffset = Math.sin(gameTime * 10) * 3;
+                        // 畫像素水滴方塊
+                        ctx.fillRect(screenX + size / 2 - 6, screenY - size / 2 - 12 + dropOffset, 4, 6);
+                        ctx.fillRect(screenX + size / 2 - 5, screenY - size / 2 - 14 + dropOffset, 2, 2);
                     }
-                    if (e.stunTimer > 0 && Math.floor(gameTime * 20) % 2 === 0) {
-                        ctx.fillStyle = '#ffff00';
-                        ctx.fillRect(screenX - 4, screenY - size / 2 - 14, 8, 8);
+
+                    // 像素風感電電流特效
+                    if (e.stunTimer > 0) {
+                        ctx.fillStyle = '#00ffff';
+                        // 畫像素交叉閃電閃爍
+                        let sparkTick = Math.floor(gameTime * 30) % 2;
+                        if (sparkTick === 0) {
+                            ctx.fillRect(screenX - 8, screenY - 6, 4, 4);
+                            ctx.fillRect(screenX + 4, screenY + 2, 4, 4);
+                            ctx.fillRect(screenX, screenY - 10, 4, 4);
+                        } else {
+                            ctx.fillRect(screenX + 4, screenY - 6, 4, 4);
+                            ctx.fillRect(screenX - 8, screenY + 4, 4, 4);
+                        }
                     }
                 }
             });
@@ -1327,6 +1361,7 @@
                 ctx.strokeRect(screenX - b.radius, screenY - b.radius, b.radius * 2, b.radius * 2);
             });
 
+            // 粒子特效渲染（含像素風超載爆炸、像素脈衝閃電鏈）
             particles.forEach(p => {
                 if (p.type === 'spark') {
                     let sx = p.worldX - camX;
@@ -1338,26 +1373,37 @@
                     let sy = p.worldY - camY;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                     ctx.fillRect(sx - 3, sy - 3, 6, 6);
+                } else if (p.type === 'pixelExplosion') {
+                    let sx = p.worldX - camX;
+                    let sy = p.worldY - camY;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
                 } else if (p.type === 'lightning') {
                     let sx1 = p.startX - camX;
                     let sy1 = p.startY - camY;
                     let sx2 = p.targetX - camX;
                     let sy2 = p.targetY - camY;
 
+                    // 復古像素風格的鋸齒粗線閃電
                     ctx.strokeStyle = '#00ffff';
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 4;
                     ctx.beginPath();
-                    ctx.moveTo(sx1, sy1);
+                    ctx.moveTo(Math.round(sx1), Math.round(sy1));
 
-                    let segments = 4;
+                    let segments = 3;
                     for (let s = 1; s < segments; s++) {
                         let t = s / segments;
-                        let interX = sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 18;
-                        let interY = sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 18;
+                        let interX = Math.round(sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 22);
+                        let interY = Math.round(sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 22);
                         ctx.lineTo(interX, interY);
                     }
 
-                    ctx.lineTo(sx2, sy2);
+                    ctx.lineTo(Math.round(sx2), Math.round(sy2));
+                    ctx.stroke();
+
+                    // 內部白色核心高光像素線條
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
                     ctx.stroke();
                 }
             });
