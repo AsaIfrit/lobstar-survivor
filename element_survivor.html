@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scale=no">
+  <title>Element Survivor - PokéSurvivor Reskin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0f19;
+      color: #ffffff;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+    }
+
+    /* Glassmorphism Card Overlay */
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-hover {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .card-hover:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: rgba(99, 102, 241, 0.6);
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+    }
+
+    /* Custom Virtual Joystick Container */
+    #joystick-container {
+      position: absolute;
+      bottom: 30px;
+      left: 30px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      display: none;
+      touch-action: none;
+      z-index: 20;
+    }
+
+    #joystick-knob {
+      position: absolute;
+      top: 35px;
+      left: 35px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.9) 0%, rgba(79, 70, 229, 0.7) 100%);
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.8);
+      pointer-events: none;
+    }
+
+    /* Glow pulse animation */
+    @keyframes pulse-glow {
+      0%, 100% { filter: drop-shadow(0 0 15px rgba(236, 72, 153, 0.6)); }
+      50% { filter: drop-shadow(0 0 30px rgba(236, 72, 153, 0.9)); }
+    }
+
+    .animate-glow {
+      animation: pulse-glow 2s infinite;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-white select-none">
+
+  <div id="game-container">
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top HUD Overlay -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-4 pointer-events-none flex flex-col gap-2 z-10">
+      <div class="flex justify-between items-center max-w-4xl mx-auto w-full">
+        
+        <!-- Player Level & Status -->
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-indigo-600/80 border border-indigo-400 flex items-center justify-center font-black text-xl shadow-lg shadow-indigo-500/30">
+            <span id="level-display">1</span>
+          </div>
+          <div class="flex flex-col w-36 sm:w-48">
+            <div class="flex justify-between text-xs font-semibold mb-1">
+              <span class="text-emerald-400">HP</span>
+              <span id="hp-text" class="text-gray-300">100 / 100</span>
+            </div>
+            <!-- HP Bar -->
+            <div class="w-full h-3 bg-gray-900/80 rounded-full border border-gray-700 overflow-hidden">
+              <div id="hp-bar" class="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-200" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Survival Timer -->
+        <div class="text-center">
+          <div class="text-xs uppercase tracking-widest text-gray-400 font-bold">Survival Time</div>
+          <div id="timer-display" class="text-2xl font-mono font-black text-amber-300 drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]">00:00</div>
+        </div>
+
+        <!-- Kill Counter & Active Spells -->
+        <div class="flex items-center gap-4">
+          <div class="text-right hidden sm:block">
+            <div class="text-xs uppercase tracking-widest text-gray-400 font-bold">Kills</div>
+            <div id="kills-display" class="text-xl font-black text-rose-400">0</div>
+          </div>
+          <button id="pause-btn" class="pointer-events-auto p-2.5 rounded-xl bg-gray-800/80 hover:bg-gray-700 border border-gray-600 text-gray-200 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- XP Bar Top/Full width sub-header -->
+      <div class="max-w-4xl mx-auto w-full mt-1">
+        <div class="w-full h-2.5 bg-gray-900/80 rounded-full border border-gray-800 overflow-hidden">
+          <div id="xp-bar" class="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 transition-all duration-150" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Active Spells & Passives Inventory Tray -->
+      <div id="inventory-bar" class="max-w-4xl mx-auto w-full flex items-center justify-between text-xs text-gray-300 mt-1 pointer-events-auto">
+        <div class="flex items-center gap-1.5" id="active-spells-list">
+          <!-- Active Spells Icons appended dynamically -->
+        </div>
+        <div class="flex items-center gap-1.5" id="active-passives-list">
+          <!-- Active Passives Icons appended dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Virtual Joystick for Mobile -->
+    <div id="joystick-container">
+      <div id="joystick-knob"></div>
+    </div>
+
+    <!-- Boss Warning Banner Overlay -->
+    <div id="boss-warning" class="absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden flex-col items-center z-20">
+      <div class="text-4xl sm:text-6xl font-black text-red-500 tracking-wider animate-bounce drop-shadow-[0_0_20px_rgba(239,68,68,0.8)]">⚠️ BOSS APPROACHING ⚠️</div>
+      <div class="text-sm sm:text-base text-red-200 font-semibold tracking-widest uppercase bg-red-950/80 px-4 py-1 rounded-full border border-red-600/50 mt-2">Defeat the High Elemental Demon!</div>
+    </div>
+
+    <!-- START / MENU MODAL -->
+    <div id="start-modal" class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/90 backdrop-blur-md">
+      <div class="glass-panel p-8 rounded-3xl max-w-lg w-full text-center border border-indigo-500/30">
+        <div class="inline-block p-4 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 mb-4 animate-glow">
+          <span class="text-5xl">🔮</span>
+        </div>
+        <h1 class="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-indigo-400 to-fuchsia-400 mb-2">ELEMENT SURVIVOR</h1>
+        <p class="text-gray-300 text-sm mb-6">Summon elemental spirits, defeat endless swarms of void slimes, and evolve your powers into legendary spells!</p>
+        
+        <div class="bg-gray-900/60 p-4 rounded-2xl border border-gray-800 text-left text-xs text-gray-400 space-y-2 mb-6">
+          <div class="flex items-center gap-2"><span class="text-indigo-400 font-bold">🎮 Controls:</span> WASD / Arrow Keys or Virtual Touch Joystick on Mobile</div>
+          <div class="flex items-center gap-2"><span class="text-amber-400 font-bold">⚡ Evolution:</span> Max out a spell (Lv. 5) + Pair with passive & defeat Bosses for Chests!</div>
+          <div class="flex items-center gap-2"><span class="text-emerald-400 font-bold">💎 Objectives:</span> Collect XP gems, survive boss raids at 1m, 2m & 3m mark.</div>
+        </div>
+
+        <button id="start-btn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 font-bold text-lg text-white shadow-xl shadow-indigo-600/30 transition transform active:scale-95">
+          BEGIN SURVIVAL
+        </button>
+      </div>
+    </div>
+
+    <!-- LEVEL UP / EVOLUTION MODAL -->
+    <div id="levelup-modal" class="absolute inset-0 z-40 hidden flex items-center justify-center p-4 bg-gray-950/80 backdrop-blur-md">
+      <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-2xl w-full text-center">
+        <div class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">POWER UP</div>
+        <h2 id="levelup-title" class="text-3xl font-black text-white mb-6">SELECT AN UPGRADE</h2>
+        
+        <!-- Cards Container -->
+        <div id="cards-container" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <!-- Card templates inserted dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TREASURE CHEST / EVOLUTION REWARD MODAL -->
+    <div id="chest-modal" class="absolute inset-0 z-40 hidden flex items-center justify-center p-4 bg-gray-950/85 backdrop-blur-lg">
+      <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center border-2 border-amber-500/50 shadow-2xl shadow-amber-500/20">
+        <div class="text-6xl mb-4 animate-bounce">🎁</div>
+        <div class="text-xs font-extrabold text-amber-400 uppercase tracking-widest">BOSS TREASURE CHEST</div>
+        <h2 id="chest-headline" class="text-2xl font-black text-white mt-1 mb-4">SPELL EVOLVED!</h2>
+        
+        <div id="chest-content" class="bg-gray-900/80 p-5 rounded-2xl border border-amber-500/30 text-center mb-6">
+          <div id="chest-item-icon" class="text-5xl mb-2">🔥</div>
+          <div id="chest-item-title" class="text-xl font-bold text-amber-300">Flame Monarch</div>
+          <p id="chest-item-desc" class="text-xs text-gray-300 mt-2">Fireball evolved into a massive, piercing inferno ring that incinerates surrounding enemies!</p>
+        </div>
+
+        <button id="chest-claim-btn" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 font-bold text-white shadow-lg shadow-amber-500/30 hover:opacity-90 transition">
+          CLAIM REWARD
+        </button>
+      </div>
+    </div>
+
+    <!-- PAUSE MODAL -->
+    <div id="pause-modal" class="absolute inset-0 z-40 hidden flex items-center justify-center p-4 bg-gray-950/80 backdrop-blur-md">
+      <div class="glass-panel p-8 rounded-3xl max-w-sm w-full text-center">
+        <h2 class="text-3xl font-black text-white mb-6">GAME PAUSED</h2>
+        <div class="space-y-3">
+          <button id="resume-btn" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-white">RESUME</button>
+          <button id="restart-pause-btn" class="w-full py-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 font-semibold text-gray-300">RESTART</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER / VICTORY MODAL -->
+    <div id="gameover-modal" class="absolute inset-0 z-50 hidden flex items-center justify-center p-4 bg-gray-950/90 backdrop-blur-md">
+      <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center">
+        <div id="gameover-icon" class="text-6xl mb-2">☠️</div>
+        <h2 id="gameover-title" class="text-3xl font-black text-red-500 mb-1">DEFEATED</h2>
+        <p id="gameover-subtitle" class="text-xs text-gray-400 mb-6">You were overwhelmed by the void.</p>
+
+        <div class="bg-gray-900/60 p-4 rounded-2xl border border-gray-800 grid grid-cols-2 gap-4 text-center mb-6">
+          <div>
+            <div class="text-xs text-gray-500 uppercase font-semibold">Time Survived</div>
+            <div id="stat-time" class="text-lg font-mono font-bold text-amber-300">00:00</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 uppercase font-semibold">Enemies Slain</div>
+            <div id="stat-kills" class="text-lg font-bold text-rose-400">0</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 uppercase font-semibold">Level Reached</div>
+            <div id="stat-level" class="text-lg font-bold text-indigo-400">1</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 uppercase font-semibold">Damage Dealt</div>
+            <div id="stat-damage" class="text-lg font-bold text-cyan-400">0</div>
+          </div>
+        </div>
+
+        <button id="restart-btn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 font-bold text-white shadow-xl shadow-indigo-600/30 hover:opacity-90 transition">
+          TRY AGAIN
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* ==========================================================================
+       ELEMENT SURVIVOR - FULL GAME ENGINE & CODE
+       ========================================================================== */
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Canvas Resizing
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    /* --------------------------------------------------------------------------
+       GAME DATABASE & CONFIGURATIONS
+       -------------------------------------------------------------------------- */
+
+    // Spells Configuration (Active Weapons)
+    const SPELL_DB = {
+      fire: {
+        id: 'fire',
+        name: 'Fire Spirit',
+        evolvedName: 'Flame Monarch',
+        icon: '🔥',
+        color: '#f97316',
+        desc: 'Launches fireballs that explode and burn enemies.',
+        evolvedDesc: 'Summons colossal piercing inferno rings with massive splash damage.',
+        level: 0,
+        maxLevel: 5,
+        passivePair: 'power',
+        isEvolved: false,
+        cooldown: 1200, // ms
+        lastCast: 0,
+        baseDamage: 25,
+        speed: 8
+      },
+      ice: {
+        id: 'ice',
+        name: 'Ice Spirit',
+        evolvedName: 'Frost Empress',
+        icon: '❄️',
+        color: '#38bdf8',
+        desc: 'Fires freezing ice shards that slow down enemies.',
+        evolvedDesc: 'Triggers absolute zero blizzard spikes that freeze large areas.',
+        level: 0,
+        maxLevel: 5,
+        passivePair: 'area',
+        isEvolved: false,
+        cooldown: 1500,
+        lastCast: 0,
+        baseDamage: 18,
+        speed: 10
+      },
+      lightning: {
+        id: 'lightning',
+        name: 'Lightning Spirit',
+        evolvedName: 'Thunder Lord',
+        icon: '⚡',
+        color: '#facc15',
+        desc: 'Calls down instant lightning bolts on nearby enemies.',
+        evolvedDesc: 'Chain lightning strikes multiple targets continuously with high crit.',
+        level: 0,
+        maxLevel: 5,
+        passivePair: 'cd',
+        isEvolved: false,
+        cooldown: 1000,
+        lastCast: 0,
+        baseDamage: 30,
+        speed: 0
+      },
+      wind: {
+        id: 'wind',
+        name: 'Nature Spirit',
+        evolvedName: 'Gaia Tempest',
+        icon: '🍃',
+        color: '#4ade80',
+        desc: 'Swirling razor leaves shield you and damage nearby foes.',
+        evolvedDesc: 'Massive razor leaf hurricane knocking back and shredding all nearby enemies.',
+        level: 0,
+        maxLevel: 5,
+        passivePair: 'speed',
+        isEvolved: false,
+        cooldown: 0, // Continuous
+        lastCast: 0,
+        baseDamage: 8,
+        speed: 0
+      }
+    };
+
+    // Passives Configuration
+    const PASSIVE_DB = {
+      power: { id: 'power', name: 'Attack Power', icon: '⚔️', desc: '+20% Damage Boost', level: 0, maxLevel: 5 },
+      cd: { id: 'cd', name: 'Cooldown Reduction', icon: '⏱️', desc: '+15% Attack Speed', level: 0, maxLevel: 5 },
+      area: { id: 'area', name: 'Area Size', icon: '💥', desc: '+25% Spell Size & Range', level: 0, maxLevel: 5 },
+      speed: { id: 'speed', name: 'Move Speed', icon: '👟', desc: '+15% Movement Speed', level: 0, maxLevel: 5 },
+      magnet: { id: 'magnet', name: 'XP Magnet', icon: '🧲', desc: '+50% Item Pickup Range', level: 0, maxLevel: 5 }
+    };
+
+    /* --------------------------------------------------------------------------
+       GAME STATE
+       -------------------------------------------------------------------------- */
+
+    const gameState = {
+      running: false,
+      paused: false,
+      time: 0, // In seconds
+      kills: 0,
+      totalDamage: 0,
+      level: 1,
+      xp: 0,
+      xpToNextLevel: 10,
+      lastTimestamp: 0,
+      bossSpawnedAt: { 60: false, 120: false, 180: false },
+      
+      // Entities
+      player: null,
+      enemies: [],
+      projectiles: [],
+      xpGems: [],
+      chests: [],
+      particles: [],
+      damageNumbers: [],
+
+      // Active Upgrades tracking
+      spells: JSON.parse(JSON.stringify(SPELL_DB)),
+      passives: JSON.parse(JSON.stringify(PASSIVE_DB))
+    };
+
+    // Input Controls
+    const keys = {};
+    const joystick = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
+
+    /* --------------------------------------------------------------------------
+       PLAYER CLASS
+       -------------------------------------------------------------------------- */
+
+    class Player {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 16;
+        this.baseSpeed = 3.2;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.invulnerableTimer = 0;
+        this.angle = 0;
+      }
+
+      get speed() {
+        const speedBonus = 1 + (gameState.passives.speed.level * 0.15);
+        return this.baseSpeed * speedBonus;
+      }
+
+      get damageMultiplier() {
+        return 1 + (gameState.passives.power.level * 0.20);
+      }
+
+      get cdMultiplier() {
+        return Math.max(0.3, 1 - (gameState.passives.cd.level * 0.15));
+      }
+
+      get areaMultiplier() {
+        return 1 + (gameState.passives.area.level * 0.25);
+      }
+
+      get magnetRange() {
+        return 80 * (1 + gameState.passives.magnet.level * 0.50);
+      }
+
+      update(dt) {
+        // Handle Damage cooldown
+        if (this.invulnerableTimer > 0) {
+          this.invulnerableTimer -= dt;
+        }
+
+        // Velocity computation from keyboard + joystick
+        let moveX = 0;
+        let moveY = 0;
+
+        if (keys['KeyW'] || keys['ArrowUp']) moveY -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) moveY += 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+
+        if (joystick.active) {
+          moveX = joystick.dx;
+          moveY = joystick.dy;
+        }
+
+        // Normalize vector
+        const len = Math.hypot(moveX, moveY);
+        if (len > 0.1) {
+          const normX = moveX / (len > 1 ? len : 1);
+          const normY = moveY / (len > 1 ? len : 1);
+          
+          this.x += normX * this.speed;
+          this.y += normY * this.speed;
+          this.angle = Math.atan2(normY, normX);
+
+          // Spawn subtle trailing particles
+          if (Math.random() < 0.3) {
+            spawnParticle(this.x, this.y + 10, '#818cf8', 2, (Math.random() - 0.5), (Math.random() - 0.5), 20);
+          }
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Invulnerable flash effect
+        if (this.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
+          ctx.globalAlpha = 0.5;
+        }
+
+        // Player Aura Glow
+        const auraGradient = ctx.createRadialGradient(0, 0, 5, 0, 0, this.radius + 10);
+        auraGradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+        auraGradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+        ctx.fillStyle = auraGradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius + 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Player Avatar Body (Procedural Wizard Orb)
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#c7d2fe';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Inner Magic Core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(Math.cos(this.angle) * 4, Math.sin(this.angle) * 4, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      takeDamage(amount) {
+        if (this.invulnerableTimer > 0) return;
+
+        this.hp -= amount;
+        this.invulnerableTimer = 0.5; // 500ms iframe
+        triggerScreenShake(8);
+
+        // Spawn hit blood/energy particles
+        for (let i = 0; i < 8; i++) {
+          spawnParticle(this.x, this.y, '#ef4444', 3, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, 25);
+        }
+
+        updateHUD();
+
+        if (this.hp <= 0) {
+          this.hp = 0;
+          gameOver(false);
+        }
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       ENEMY CLASS & SPAWNING
+       -------------------------------------------------------------------------- */
+
+    class Enemy {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type; // 'slime', 'goblin', 'golem', 'boss'
+        this.frozenTimer = 0;
+        this.burnTimer = 0;
+        this.burnDamage = 0;
+
+        if (type === 'slime') {
+          this.radius = 12;
+          this.hp = 20 + gameState.time * 0.5;
+          this.maxHp = this.hp;
+          this.speed = 1.8;
+          this.color = '#22c55e';
+          this.xpValue = 1;
+          this.damage = 8;
+        } else if (type === 'goblin') {
+          this.radius = 16;
+          this.hp = 45 + gameState.time * 1.0;
+          this.maxHp = this.hp;
+          this.speed = 2.4;
+          this.color = '#a855f7';
+          this.xpValue = 3;
+          this.damage = 14;
+        } else if (type === 'golem') {
+          this.radius = 24;
+          this.hp = 180 + gameState.time * 2.5;
+          this.maxHp = this.hp;
+          this.speed = 1.0;
+          this.color = '#64748b';
+          this.xpValue = 8;
+          this.damage = 22;
+        } else if (type === 'boss') {
+          this.radius = 45;
+          this.hp = 1200 + gameState.time * 15;
+          this.maxHp = this.hp;
+          this.speed = 1.2;
+          this.color = '#ef4444';
+          this.xpValue = 50;
+          this.damage = 35;
+          this.isBoss = true;
+        }
+      }
+
+      update(dt) {
+        const player = gameState.player;
+        
+        // Status Effects
+        if (this.frozenTimer > 0) {
+          this.frozenTimer -= dt;
+        }
+
+        if (this.burnTimer > 0) {
+          this.burnTimer -= dt;
+          if (Math.random() < 0.2) {
+            this.takeDamage(this.burnDamage * dt, '#f97316');
+          }
+        }
+
+        // Movement toward player
+        const effSpeed = this.frozenTimer > 0 ? this.speed * 0.4 : this.speed;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 0) {
+          this.x += (dx / dist) * effSpeed;
+          this.y += (dy / dist) * effSpeed;
+        }
+
+        // Check collision with Player
+        if (dist < this.radius + player.radius) {
+          player.takeDamage(this.damage);
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Frozen tint
+        if (this.frozenTimer > 0) {
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 15;
+        }
+
+        // Enemy Body
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        if (this.type === 'golem') {
+          // Hexagon shape
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const px = Math.cos(angle) * this.radius;
+            const py = Math.sin(angle) * this.radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+        } else {
+          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        }
+        ctx.fill();
+
+        // Outline
+        ctx.strokeStyle = this.isBoss ? '#f59e0b' : 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = this.isBoss ? 4 : 2;
+        ctx.stroke();
+
+        // Boss Health Bar Overhead
+        if (this.isBoss) {
+          const barW = 60;
+          const barH = 6;
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(-barW / 2, -this.radius - 16, barW, barH);
+
+          const hpPercent = Math.max(0, this.hp / this.maxHp);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(-barW / 2, -this.radius - 16, barW * hpPercent, barH);
+        }
+
+        ctx.restore();
+      }
+
+      takeDamage(amount, color = '#ffffff') {
+        this.hp -= amount;
+        gameState.totalDamage += amount;
+
+        spawnDamageNumber(this.x, this.y - 10, Math.round(amount), color);
+
+        if (this.hp <= 0) {
+          this.die();
+        }
+      }
+
+      die() {
+        const index = gameState.enemies.indexOf(this);
+        if (index > -1) {
+          gameState.enemies.splice(index, 1);
+          gameState.kills++;
+          updateHUD();
+
+          // Death Explosion Particles
+          for (let i = 0; i < (this.isBoss ? 30 : 8); i++) {
+            spawnParticle(this.x, this.y, this.color, 3, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 30);
+          }
+
+          // Drop Items
+          if (this.isBoss) {
+            gameState.chests.push(new TreasureChest(this.x, this.y));
+          } else {
+            gameState.xpGems.push(new XPGem(this.x, this.y, this.xpValue));
+          }
+        }
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       SPELLS & PROJECTILES LOGIC
+       -------------------------------------------------------------------------- */
+
+    class Projectile {
+      constructor(x, y, vx, vy, spellId, damage, extra = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.spellId = spellId;
+        this.damage = damage;
+        this.extra = extra;
+        this.life = extra.life || 180; // frames
+        this.radius = extra.radius || 8;
+        this.pierce = extra.pierce || 1;
+        this.hitList = new Set();
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life--;
+
+        // Particle trail
+        if (Math.random() < 0.6) {
+          const pColor = SPELL_DB[this.spellId]?.color || '#ffffff';
+          spawnParticle(this.x, this.y, pColor, 2, (Math.random() - 0.5), (Math.random() - 0.5), 15);
+        }
+
+        // Collision with Enemies
+        for (let enemy of gameState.enemies) {
+          if (this.hitList.has(enemy)) continue;
+
+          const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+          if (dist < enemy.radius + this.radius) {
+            this.hitList.add(enemy);
+
+            // Apply Spell Specific Impacts
+            if (this.spellId === 'fire') {
+              enemy.burnTimer = 3;
+              enemy.burnDamage = this.damage * 0.3;
+              // Splash damage on explode
+              if (this.extra.isEvolved) {
+                spawnAreaExplosion(this.x, this.y, 70, this.damage * 0.5, '#f97316');
+              }
+            } else if (this.spellId === 'ice') {
+              enemy.frozenTimer = this.extra.isEvolved ? 2.5 : 1.2;
+            }
+
+            enemy.takeDamage(this.damage, SPELL_DB[this.spellId]?.color);
+            this.pierce--;
+
+            if (this.pierce <= 0) {
+              this.life = 0;
+              break;
+            }
+          }
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        const color = SPELL_DB[this.spellId]?.color || '#ffffff';
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    function castSpells(now) {
+      const p = gameState.player;
+
+      // 1. FIRE SPIRIT
+      const fire = gameState.spells.fire;
+      if (fire.level > 0 && now - fire.lastCast > fire.cooldown * p.cdMultiplier) {
+        fire.lastCast = now;
+        const target = getNearestEnemy(p.x, p.y);
+        const angle = target ? Math.atan2(target.y - p.y, target.x - p.x) : p.angle;
+        
+        const count = fire.isEvolved ? 4 : Math.min(fire.level, 3);
+        const dmg = fire.baseDamage * fire.level * p.damageMultiplier;
+
+        for (let i = 0; i < count; i++) {
+          const spread = (i - (count - 1) / 2) * 0.25;
+          const vx = Math.cos(angle + spread) * fire.speed;
+          const vy = Math.sin(angle + spread) * fire.speed;
+          
+          gameState.projectiles.push(new Projectile(p.x, p.y, vx, vy, 'fire', dmg, {
+            radius: (fire.isEvolved ? 18 : 10) * p.areaMultiplier,
+            pierce: fire.isEvolved ? 99 : 1 + Math.floor(fire.level / 2),
+            isEvolved: fire.isEvolved
+          }));
+        }
+      }
+
+      // 2. ICE SPIRIT
+      const ice = gameState.spells.ice;
+      if (ice.level > 0 && now - ice.lastCast > ice.cooldown * p.cdMultiplier) {
+        ice.lastCast = now;
+        const count = ice.isEvolved ? 8 : 2 + ice.level;
+        const dmg = ice.baseDamage * ice.level * p.damageMultiplier;
+
+        for (let i = 0; i < count; i++) {
+          const angle = (i * Math.PI * 2) / count;
+          const vx = Math.cos(angle) * ice.speed;
+          const vy = Math.sin(angle) * ice.speed;
+
+          gameState.projectiles.push(new Projectile(p.x, p.y, vx, vy, 'ice', dmg, {
+            radius: (ice.isEvolved ? 14 : 7) * p.areaMultiplier,
+            pierce: ice.isEvolved ? 3 : 1,
+            isEvolved: ice.isEvolved
+          }));
+        }
+      }
+
+      // 3. LIGHTNING SPIRIT
+      const lightning = gameState.spells.lightning;
+      if (lightning.level > 0 && now - lightning.lastCast > lightning.cooldown * p.cdMultiplier) {
+        lightning.lastCast = now;
+        const targets = getMultipleEnemies(p.x, p.y, lightning.isEvolved ? 8 : lightning.level, 350 * p.areaMultiplier);
+        const dmg = lightning.baseDamage * lightning.level * p.damageMultiplier;
+
+        targets.forEach(target => {
+          target.takeDamage(dmg, lightning.color);
+          
+          // Lightning bolt visual FX
+          spawnLightningFX(p.x, p.y, target.x, target.y, lightning.color);
+        });
+      }
+
+      // 4. NATURE/WIND SPIRIT (Continuous Rotating Shield)
+      const wind = gameState.spells.wind;
+      if (wind.level > 0) {
+        const count = wind.isEvolved ? 8 : wind.level + 1;
+        const orbitRadius = (wind.isEvolved ? 90 : 65) * p.areaMultiplier;
+        const rotSpeed = now * 0.003;
+        const dmg = (wind.baseDamage * wind.level * p.damageMultiplier) / 10;
+
+        for (let i = 0; i < count; i++) {
+          const angle = rotSpeed + (i * Math.PI * 2) / count;
+          const leafX = p.x + Math.cos(angle) * orbitRadius;
+          const leafY = p.y + Math.sin(angle) * orbitRadius;
+
+          // Draw Leaf Orbit
+          ctx.save();
+          ctx.fillStyle = wind.color;
+          ctx.shadowColor = wind.color;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(leafX, leafY, wind.isEvolved ? 12 : 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Check contact with nearby enemies
+          gameState.enemies.forEach(enemy => {
+            if (Math.hypot(enemy.x - leafX, enemy.y - leafY) < enemy.radius + 10) {
+              enemy.takeDamage(dmg, wind.color);
+              // Slight pushback
+              const pushAngle = Math.atan2(enemy.y - p.y, enemy.x - p.x);
+              enemy.x += Math.cos(pushAngle) * 2;
+              enemy.y += Math.sin(pushAngle) * 2;
+            }
+          });
+        }
+      }
+    }
+
+    function spawnAreaExplosion(x, y, radius, damage, color) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      gameState.enemies.forEach(enemy => {
+        if (Math.hypot(enemy.x - x, enemy.y - y) < enemy.radius + radius) {
+          enemy.takeDamage(damage, color);
+        }
+      });
+    }
+
+    function spawnLightningFX(x1, y1, x2, y2, color) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      
+      const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * 30;
+      const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 30;
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    /* --------------------------------------------------------------------------
+       XP GEMS & TREASURE CHESTS
+       -------------------------------------------------------------------------- */
+
+    class XPGem {
+      constructor(x, y, value) {
+        this.x = x;
+        this.y = y;
+        this.value = value;
+        this.radius = value >= 8 ? 7 : value >= 3 ? 5 : 4;
+        this.color = value >= 8 ? '#a855f7' : value >= 3 ? '#38bdf8' : '#22c55e';
+      }
+
+      update() {
+        const p = gameState.player;
+        const dist = Math.hypot(p.x - this.x, p.y - this.y);
+
+        if (dist < p.magnetRange) {
+          // Magnet attraction
+          const speed = 7 * (1 - dist / p.magnetRange) + 2;
+          this.x += ((p.x - this.x) / dist) * speed;
+          this.y += ((p.y - this.y) / dist) * speed;
+        }
+
+        if (dist < p.radius + this.radius) {
+          addXP(this.value);
+          const idx = gameState.xpGems.indexOf(this);
+          if (idx > -1) gameState.xpGems.splice(idx, 1);
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class TreasureChest {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 14;
+      }
+
+      update() {
+        const p = gameState.player;
+        const dist = Math.hypot(p.x - this.x, p.y - this.y);
+
+        if (dist < p.radius + this.radius) {
+          triggerChestReward();
+          const idx = gameState.chests.indexOf(this);
+          if (idx > -1) gameState.chests.splice(idx, 1);
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.fillStyle = '#f59e0b';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12;
+
+        ctx.fillRect(-12, -10, 24, 20);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(-4, -4, 8, 8);
+
+        ctx.restore();
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       PARTICLES & DAMAGE NUMBERS
+       -------------------------------------------------------------------------- */
+
+    function spawnParticle(x, y, color, radius, vx, vy, maxLife) {
+      gameState.particles.push({ x, y, color, radius, vx, vy, life: maxLife, maxLife });
+    }
+
+    function updateParticles() {
+      for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        const p = gameState.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+
+        if (p.life <= 0) {
+          gameState.particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function spawnDamageNumber(x, y, text, color = '#ffffff') {
+      gameState.damageNumbers.push({ x, y, text, color, alpha: 1.0, vy: -1.2 });
+    }
+
+    function updateDamageNumbers() {
+      for (let i = gameState.damageNumbers.length - 1; i >= 0; i--) {
+        const d = gameState.damageNumbers[i];
+        d.y += d.vy;
+        d.alpha -= 0.02;
+
+        if (d.alpha <= 0) {
+          gameState.damageNumbers.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = d.alpha;
+        ctx.font = '900 13px Inter, sans-serif';
+        ctx.fillStyle = d.color;
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 4;
+        ctx.fillText(d.text, d.x, d.y);
+        ctx.restore();
+      }
+    }
+
+    // Screen Shake Effect
+    let screenShakeIntensity = 0;
+    function triggerScreenShake(intensity) {
+      screenShakeIntensity = intensity;
+    }
+
+    /* --------------------------------------------------------------------------
+       HELPER UTILITIES
+       -------------------------------------------------------------------------- */
+
+    function getNearestEnemy(x, y) {
+      let nearest = null;
+      let minDist = Infinity;
+      for (let enemy of gameState.enemies) {
+        const d = Math.hypot(enemy.x - x, enemy.y - y);
+        if (d < minDist) {
+          minDist = d;
+          nearest = enemy;
+        }
+      }
+      return nearest;
+    }
+
+    function getMultipleEnemies(x, y, count, maxDist) {
+      return gameState.enemies
+        .map(e => ({ enemy: e, dist: Math.hypot(e.x - x, e.y - y) }))
+        .filter(item => item.dist <= maxDist)
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, count)
+        .map(item => item.enemy);
+    }
+
+    /* --------------------------------------------------------------------------
+       GAME LOGIC & LEVEL UP EVOLUTION SYSTEM
+       -------------------------------------------------------------------------- */
+
+    function addXP(amount) {
+      gameState.xp += amount;
+      if (gameState.xp >= gameState.xpToNextLevel) {
+        gameState.xp -= gameState.xpToNextLevel;
+        gameState.level++;
+        gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.35);
+        triggerLevelUpModal();
+      }
+      updateHUD();
+    }
+
+    function triggerLevelUpModal() {
+      gameState.paused = true;
+
+      const container = document.getElementById('cards-container');
+      container.innerHTML = '';
+
+      // Get available upgrades
+      const options = getUpgradeOptions();
+
+      options.forEach(opt => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-5 rounded-2xl border border-gray-700/60 card-hover cursor-pointer flex flex-col items-center text-center';
+        card.onclick = () => selectUpgrade(opt);
+
+        card.innerHTML = `
+          <div class="text-4xl mb-3">${opt.icon}</div>
+          <div class="text-xs font-bold text-indigo-400 uppercase">${opt.type === 'spell' ? 'Spell Weapon' : 'Passive Ability'}</div>
+          <div class="text-lg font-black text-white mt-1">${opt.name}</div>
+          <div class="text-xs text-amber-300 font-bold mt-1">Level ${opt.currentLevel + 1} / ${opt.maxLevel}</div>
+          <p class="text-xs text-gray-300 mt-3 leading-relaxed">${opt.desc}</p>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('levelup-modal').classList.remove('hidden');
+    }
+
+    function getUpgradeOptions() {
+      const pool = [];
+
+      // Spells
+      Object.values(gameState.spells).forEach(spell => {
+        if (spell.level < spell.maxLevel && !spell.isEvolved) {
+          pool.push({
+            type: 'spell',
+            id: spell.id,
+            name: spell.name,
+            icon: spell.icon,
+            desc: spell.desc,
+            currentLevel: spell.level,
+            maxLevel: spell.maxLevel
+          });
+        }
+      });
+
+      // Passives
+      Object.values(gameState.passives).forEach(passive => {
+        if (passive.level < passive.maxLevel) {
+          pool.push({
+            type: 'passive',
+            id: passive.id,
+            name: passive.name,
+            icon: passive.icon,
+            desc: passive.desc,
+            currentLevel: passive.level,
+            maxLevel: passive.maxLevel
+          });
+        }
+      });
+
+      // Shuffle & pick up to 3
+      pool.sort(() => Math.random() - 0.5);
+      return pool.slice(0, 3);
+    }
+
+    function selectUpgrade(option) {
+      if (option.type === 'spell') {
+        gameState.spells[option.id].level++;
+      } else {
+        gameState.passives[option.id].level++;
+      }
+
+      document.getElementById('levelup-modal').classList.add('hidden');
+      updateInventoryHUD();
+      gameState.paused = false;
+    }
+
+    // Chest Evolution Reward logic
+    function triggerChestReward() {
+      gameState.paused = true;
+
+      // Check if any max level spell can evolve with paired passive
+      let evolvedSpell = null;
+
+      Object.values(gameState.spells).forEach(spell => {
+        if (!spell.isEvolved && spell.level >= spell.maxLevel) {
+          const pairedPassive = gameState.passives[spell.passivePair];
+          if (pairedPassive && pairedPassive.level > 0) {
+            evolvedSpell = spell;
+          }
+        }
+      });
+
+      const modal = document.getElementById('chest-modal');
+      const icon = document.getElementById('chest-item-icon');
+      const title = document.getElementById('chest-item-title');
+      const desc = document.getElementById('chest-item-desc');
+      const headline = document.getElementById('chest-headline');
+
+      if (evolvedSpell) {
+        evolvedSpell.isEvolved = true;
+        headline.innerText = '🔥 SPELL EVOLVED! 🔥';
+        icon.innerText = evolvedSpell.icon;
+        title.innerText = evolvedSpell.evolvedName;
+        desc.innerText = evolvedSpell.evolvedDesc;
+      } else {
+        // Fallback: Gain random stats & XP boost
+        addXP(50);
+        gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + 30);
+        headline.innerText = 'TREASURE FOUND!';
+        icon.innerText = '💎';
+        title.innerText = 'Bonus XP & Heal';
+        desc.innerText = 'Restored 30 HP and gained a massive chunk of Bonus XP!';
+      }
+
+      updateInventoryHUD();
+      modal.classList.remove('hidden');
+    }
+
+    /* --------------------------------------------------------------------------
+       SPAWNER LOGIC (WAVES & BOSSES)
+       -------------------------------------------------------------------------- */
+
+    function updateSpawns() {
+      // Enemy cap
+      if (gameState.enemies.length >= 150) return;
+
+      const p = gameState.player;
+      const time = gameState.time;
+
+      // Spawn rate ramps up over time
+      const spawnRate = Math.max(0.08, 0.4 - time * 0.001);
+
+      if (Math.random() < spawnRate) {
+        // Random off-screen coordinate
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.max(canvas.width, canvas.height) / 2 + 50;
+        const x = p.x + Math.cos(angle) * dist;
+        const y = p.y + Math.sin(angle) * dist;
+
+        // Enemy type selection depending on elapsed time
+        let type = 'slime';
+        const rand = Math.random();
+        if (time > 120 && rand < 0.25) type = 'golem';
+        else if (time > 45 && rand < 0.45) type = 'goblin';
+
+        gameState.enemies.push(new Enemy(x, y, type));
+      }
+
+      // Check Boss Spawns at 1m (60s), 2m (120s), 3m (180s)
+      [60, 120, 180].forEach(milestone => {
+        if (time >= milestone && !gameState.bossSpawnedAt[milestone]) {
+          gameState.bossSpawnedAt[milestone] = true;
+          spawnBoss();
+        }
+      });
+    }
+
+    function spawnBoss() {
+      const p = gameState.player;
+      const x = p.x + 300;
+      const y = p.y + 300;
+      gameState.enemies.push(new Enemy(x, y, 'boss'));
+
+      // Show Boss Warning UI
+      const banner = document.getElementById('boss-warning');
+      banner.classList.remove('hidden');
+      setTimeout(() => banner.classList.add('hidden'), 3500);
+    }
+
+    /* --------------------------------------------------------------------------
+       UI / HUD UPDATES
+       -------------------------------------------------------------------------- */
+
+    function updateHUD() {
+      const p = gameState.player;
+      document.getElementById('level-display').innerText = gameState.level;
+      document.getElementById('hp-text').innerText = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+      document.getElementById('hp-bar').style.width = `${Math.max(0, (p.hp / p.maxHp) * 100)}%`;
+
+      const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
+      document.getElementById('xp-bar').style.width = `${Math.min(100, xpPercent)}%`;
+
+      document.getElementById('kills-display').innerText = gameState.kills;
+
+      // Timer format
+      const mins = Math.floor(gameState.time / 60).toString().padStart(2, '0');
+      const secs = Math.floor(gameState.time % 60).toString().padStart(2, '0');
+      document.getElementById('timer-display').innerText = `${mins}:${secs}`;
+    }
+
+    function updateInventoryHUD() {
+      const spellsContainer = document.getElementById('active-spells-list');
+      const passivesContainer = document.getElementById('active-passives-list');
+
+      spellsContainer.innerHTML = '';
+      passivesContainer.innerHTML = '';
+
+      Object.values(gameState.spells).forEach(spell => {
+        if (spell.level > 0) {
+          const badge = document.createElement('div');
+          badge.className = `px-2 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 ${
+            spell.isEvolved ? 'bg-amber-500/20 border-amber-400 text-amber-300' : 'bg-gray-800 border-gray-700 text-gray-200'
+          }`;
+          badge.innerHTML = `${spell.icon} Lv.${spell.level}${spell.isEvolved ? '⭐' : ''}`;
+          spellsContainer.appendChild(badge);
+        }
+      });
+
+      Object.values(gameState.passives).forEach(passive => {
+        if (passive.level > 0) {
+          const badge = document.createElement('div');
+          badge.className = 'px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs font-bold text-gray-200 flex items-center gap-1';
+          badge.innerHTML = `${passive.icon} Lv.${passive.level}`;
+          passivesContainer.appendChild(badge);
+        }
+      });
+    }
+
+    /* --------------------------------------------------------------------------
+       MAIN GAME LOOP & RENDER
+       -------------------------------------------------------------------------- */
+
+    function gameLoop(timestamp) {
+      if (!gameState.lastTimestamp) gameState.lastTimestamp = timestamp;
+      const dt = Math.min((timestamp - gameState.lastTimestamp) / 1000, 0.1);
+      gameState.lastTimestamp = timestamp;
+
+      if (gameState.running && !gameState.paused) {
+        gameState.time += dt;
+
+        // Clear Canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Apply Screen Shake Camera Transform
+        ctx.save();
+        if (screenShakeIntensity > 0) {
+          const rx = (Math.random() - 0.5) * screenShakeIntensity;
+          const ry = (Math.random() - 0.5) * screenShakeIntensity;
+          ctx.translate(rx, ry);
+          screenShakeIntensity *= 0.9;
+          if (screenShakeIntensity < 0.1) screenShakeIntensity = 0;
+        }
+
+        // Camera Follow Player
+        const cameraX = canvas.width / 2 - gameState.player.x;
+        const cameraY = canvas.height / 2 - gameState.player.y;
+        ctx.translate(cameraX, cameraY);
+
+        // Draw Background Grid Pattern
+        drawGridBackground();
+
+        // 1. Update & Draw Items / Drops
+        gameState.xpGems.forEach(gem => { gem.update(); gem.draw(); });
+        gameState.chests.forEach(chest => { chest.update(); chest.draw(); });
+
+        // 2. Spawns & Enemies
+        updateSpawns();
+        gameState.enemies.forEach(enemy => { enemy.update(dt); enemy.draw(); });
+
+        // 3. Player & Spells
+        gameState.player.update(dt);
+        gameState.player.draw();
+        castSpells(timestamp);
+
+        // 4. Projectiles
+        for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+          const proj = gameState.projectiles[i];
+          proj.update();
+          proj.draw();
+          if (proj.life <= 0) gameState.projectiles.splice(i, 1);
+        }
+
+        // 5. FX & Damage Floaters
+        updateParticles();
+        updateDamageNumbers();
+
+        ctx.restore();
+
+        // Continuous HUD refresh
+        updateHUD();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function drawGridBackground() {
+      const gridSize = 80;
+      const p = gameState.player;
+      
+      const startX = Math.floor((p.x - canvas.width) / gridSize) * gridSize;
+      const endX = Math.floor((p.x + canvas.width) / gridSize) * gridSize;
+      const startY = Math.floor((p.y - canvas.height) / gridSize) * gridSize;
+      const endY = Math.floor((p.y + canvas.height) / gridSize) * gridSize;
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+
+      for (let x = startX; x <= endX; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+        ctx.stroke();
+      }
+      for (let y = startY; y <= endY; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       CONTROLS & EVENT LISTENERS
+       -------------------------------------------------------------------------- */
+
+    // Keyboard Listener
+    window.addEventListener('keydown', e => { keys[e.code] = true; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // Touch Virtual Joystick
+    const joystickContainer = document.getElementById('joystick-container');
+    const joystickKnob = document.getElementById('joystick-knob');
+
+    // Auto-detect touch device to display joystick
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      joystickContainer.style.display = 'block';
+    }
+
+    joystickContainer.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const rect = joystickContainer.getBoundingClientRect();
+      joystick.active = true;
+      joystick.startX = rect.left + rect.width / 2;
+      joystick.startY = rect.top + rect.height / 2;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+      if (!joystick.active) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - joystick.startX;
+      const dy = touch.clientY - joystick.startY;
+      const dist = Math.hypot(dx, dy);
+      const maxRadius = 35;
+
+      const normX = dx / (dist || 1);
+      const normY = dy / (dist || 1);
+      const clampDist = Math.min(dist, maxRadius);
+
+      joystickKnob.style.transform = `translate(${normX * clampDist}px, ${normY * clampDist}px)`;
+      
+      joystick.dx = normX;
+      joystick.dy = normY;
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => {
+      joystick.active = false;
+      joystick.dx = 0;
+      joystick.dy = 0;
+      joystickKnob.style.transform = 'translate(0px, 0px)';
+    });
+
+    /* --------------------------------------------------------------------------
+       GAME INITIALIZATION & RESET
+       -------------------------------------------------------------------------- */
+
+    function initGame() {
+      // Reset State
+      gameState.time = 0;
+      gameState.kills = 0;
+      gameState.totalDamage = 0;
+      gameState.level = 1;
+      gameState.xp = 0;
+      gameState.xpToNextLevel = 10;
+      gameState.enemies = [];
+      gameState.projectiles = [];
+      gameState.xpGems = [];
+      gameState.chests = [];
+      gameState.particles = [];
+      gameState.damageNumbers = [];
+      gameState.bossSpawnedAt = { 60: false, 120: false, 180: false };
+
+      // Reset Spells & Passives
+      gameState.spells = JSON.parse(JSON.stringify(SPELL_DB));
+      gameState.passives = JSON.parse(JSON.stringify(PASSIVE_DB));
+
+      // Starter Spell: Fire Spirit
+      gameState.spells.fire.level = 1;
+
+      // Spawn Player at center
+      gameState.player = new Player(0, 0);
+
+      updateInventoryHUD();
+      updateHUD();
+
+      gameState.running = true;
+      gameState.paused = false;
+    }
+
+    function gameOver(victory = false) {
+      gameState.running = false;
+
+      const modal = document.getElementById('gameover-modal');
+      const title = document.getElementById('gameover-title');
+      const subtitle = document.getElementById('gameover-subtitle');
+      const icon = document.getElementById('gameover-icon');
+
+      if (victory) {
+        icon.innerText = '🏆';
+        title.innerText = 'VICTORY!';
+        title.className = 'text-3xl font-black text-amber-400 mb-1';
+        subtitle.innerText = 'You conquered all elemental raids!';
+      } else {
+        icon.innerText = '☠️';
+        title.innerText = 'DEFEATED';
+        title.className = 'text-3xl font-black text-red-500 mb-1';
+        subtitle.innerText = 'You were overwhelmed by the void.';
+      }
+
+      // Populate Stats
+      const mins = Math.floor(gameState.time / 60).toString().padStart(2, '0');
+      const secs = Math.floor(gameState.time % 60).toString().padStart(2, '0');
+      document.getElementById('stat-time').innerText = `${mins}:${secs}`;
+      document.getElementById('stat-kills').innerText = gameState.kills;
+      document.getElementById('stat-level').innerText = gameState.level;
+      document.getElementById('stat-damage').innerText = Math.round(gameState.totalDamage);
+
+      modal.classList.remove('hidden');
+    }
+
+    /* --------------------------------------------------------------------------
+       BUTTON EVENT BINDINGS
+       -------------------------------------------------------------------------- */
+
+    document.getElementById('start-btn').onclick = () => {
+      document.getElementById('start-modal').classList.add('hidden');
+      initGame();
+    };
+
+    document.getElementById('restart-btn').onclick = () => {
+      document.getElementById('gameover-modal').classList.add('hidden');
+      initGame();
+    };
+
+    document.getElementById('restart-pause-btn').onclick = () => {
+      document.getElementById('pause-modal').classList.add('hidden');
+      initGame();
+    };
+
+    document.getElementById('pause-btn').onclick = () => {
+      gameState.paused = true;
+      document.getElementById('pause-modal').classList.remove('hidden');
+    };
+
+    document.getElementById('resume-btn').onclick = () => {
+      document.getElementById('pause-modal').classList.add('hidden');
+      gameState.paused = false;
+    };
+
+    document.getElementById('chest-claim-btn').onclick = () => {
+      document.getElementById('chest-modal').classList.add('hidden');
+      gameState.paused = false;
+    };
+
+    // Start 60 FPS Engine Loop on Load
+    window.onload = () => {
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
