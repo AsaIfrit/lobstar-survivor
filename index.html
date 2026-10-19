@@ -847,7 +847,7 @@
                                 vx: (Math.random() - 0.5) * 1.5,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '感電', // 精簡為感電
+                                text: '感電',
                                 color: '#d1c4e9',
                                 life: 1.0,
                                 maxLife: 1.0
@@ -943,7 +943,7 @@
                                         vx: Math.cos(outAngle) * 1.8,
                                         vy: -3.0,
                                         gravity: 0.15,
-                                        text: '蒸發', // 精簡為蒸發
+                                        text: '蒸發',
                                         color: '#ff5722',
                                         life: 1.0,
                                         maxLife: 1.0
@@ -1023,7 +1023,7 @@
                             vx: Math.cos(outAngle) * 1.2,
                             vy: -2.2,
                             gravity: 0.15,
-                            text: burnDmg, // 燃燒跳字只顯示數值本身
+                            text: burnDmg,
                             color: '#ff7043',
                             life: 1.0,
                             maxLife: 1.0
@@ -1196,7 +1196,7 @@
                                     vx: Math.cos(outAngle) * 1.8,
                                     vy: -3.0,
                                     gravity: 0.15,
-                                    text: '蒸發', // 精簡為蒸發
+                                    text: '蒸發',
                                     color: '#ff5722',
                                     life: 1.0,
                                     maxLife: 1.0
@@ -1214,7 +1214,7 @@
                                         vx: Math.cos(outAngle) * 1.2,
                                         vy: -2.5,
                                         gravity: 0.15,
-                                        text: '燃燒', // 精簡為燃燒
+                                        text: '燃燒',
                                         color: '#ff7043',
                                         life: 1.0,
                                         maxLife: 1.0
@@ -1516,7 +1516,7 @@
                                 vx: Math.cos(outAngle) * 1.2,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '超載', // 精簡為超載
+                                text: '超載',
                                 color: '#e1bee7',
                                 life: 1.0,
                                 maxLife: 1.0
@@ -1594,7 +1594,7 @@
                                 vx: Math.cos(outAngle) * 1.2,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '感電', // 精簡為感電
+                                text: '感電',
                                 color: '#ba68c8',
                                 life: 1.0,
                                 maxLife: 1.0
@@ -1817,6 +1817,56 @@
                 }
             }
 
+            // 【圖層調整】將閃電鏈攻擊特效（particles 中的 lightning）繪製在敵人與主角之下
+            particles.forEach(p => {
+                if (p.type === 'lightning') {
+                    let sx1 = p.startX - camX;
+                    let sy1 = p.startY - camY;
+                    let sx2 = p.targetX - camX;
+                    let sy2 = p.targetY - camY;
+
+                    let segments = 3;
+                    let points = [{x: Math.round(sx1), y: Math.round(sy1)}];
+                    for (let s = 1; s < segments; s++) {
+                        let t = s / segments;
+                        let interX = Math.round(sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 22);
+                        let interY = Math.round(sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 22);
+                        points.push({x: interX, y: interY});
+                    }
+                    points.push({x: Math.round(sx2), y: Math.round(sy2)});
+
+                    // 粗度調整為原本的一半：外框從 16px 改為 8px
+                    ctx.strokeStyle = '#e1bee7';
+                    ctx.lineWidth = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let pt = 1; pt < points.length; pt++) {
+                        ctx.lineTo(points[pt].x, points[pt].y);
+                    }
+                    ctx.stroke();
+
+                    // 本體從 8px 改為 4px
+                    ctx.strokeStyle = '#7b1fa2';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let pt = 1; pt < points.length; pt++) {
+                        ctx.lineTo(points[pt].x, points[pt].y);
+                    }
+                    ctx.stroke();
+
+                    // 高光從 3px 改為 1.5px
+                    ctx.strokeStyle = '#ce93d8';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let pt = 1; pt < points.length; pt++) {
+                        ctx.lineTo(points[pt].x, points[pt].y);
+                    }
+                    ctx.stroke();
+                }
+            });
+
             enemies.forEach(e => {
                 let screenX = e.x - camX;
                 let screenY = (e.y - camY) - (e.visualHeight || 0);
@@ -1863,18 +1913,36 @@
                         ctx.fillRect(screenX - size * 0.05, screenY + dropCycle3, 3, 5);
                     }
 
+                    // 【升級：真實立體柵欄籠子特效】線條加粗 1 倍，且有柵欄蓋在敵人身上
                     if (e.stunTimer > 0) {
+                        let cageBox = size * 0.8;
+
+                        // 外框線加粗 1 倍 (從 2px 改為 4px)
                         ctx.strokeStyle = '#ba68c8';
-                        ctx.lineWidth = 2;
-                        let cageBox = size * 0.75;
+                        ctx.lineWidth = 4;
                         ctx.strokeRect(screenX - cageBox, screenY - cageBox, cageBox * 2, cageBox * 2);
+
+                        // 繪製橫向與縱向的真實柵欄（蓋在敵人身上）
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        // 垂直柵欄
+                        ctx.moveTo(screenX - cageBox * 0.33, screenY - cageBox);
+                        ctx.lineTo(screenX - cageBox * 0.33, screenY + cageBox);
+                        ctx.moveTo(screenX + cageBox * 0.33, screenY - cageBox);
+                        ctx.lineTo(screenX + cageBox * 0.33, screenY + cageBox);
+                        // 水平柵欄
+                        ctx.moveTo(screenX - cageBox, screenY - cageBox * 0.33);
+                        ctx.lineTo(screenX + cageBox, screenY - cageBox * 0.33);
+                        ctx.moveTo(screenX - cageBox, screenY + cageBox * 0.33);
+                        ctx.lineTo(screenX + cageBox, screenY + cageBox * 0.33);
+                        ctx.stroke();
                         
                         let sparkTick = Math.floor(gameTime * 45) % 2;
                         ctx.fillStyle = sparkTick === 0 ? '#ffffff' : '#ba68c8';
-                        ctx.fillRect(screenX - cageBox - 2, screenY - cageBox - 2, 4, 4);
-                        ctx.fillRect(screenX + cageBox - 2, screenY - cageBox - 2, 4, 4);
-                        ctx.fillRect(screenX - cageBox - 2, screenY + cageBox - 2, 4, 4);
-                        ctx.fillRect(screenX + cageBox - 2, screenY + cageBox - 2, 4, 4);
+                        ctx.fillRect(screenX - cageBox - 3, screenY - cageBox - 3, 6, 6);
+                        ctx.fillRect(screenX + cageBox - 3, screenY - cageBox - 3, 6, 6);
+                        ctx.fillRect(screenX - cageBox - 3, screenY + cageBox - 3, 6, 6);
+                        ctx.fillRect(screenX + cageBox - 3, screenY + cageBox - 3, 6, 6);
                     }
 
                     ctx.restore();
@@ -2025,56 +2093,14 @@
                     ctx.beginPath();
                     ctx.arc(sx, sy, p.radius, 0, Math.PI * 2);
                     ctx.stroke();
-                } else if (p.type === 'lightning') {
-                    let sx1 = p.startX - camX;
-                    let sy1 = p.startY - camY;
-                    let sx2 = p.targetX - camX;
-                    let sy2 = p.targetY - camY;
-
-                    let segments = 3;
-                    let points = [{x: Math.round(sx1), y: Math.round(sy1)}];
-                    for (let s = 1; s < segments; s++) {
-                        let t = s / segments;
-                        let interX = Math.round(sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 22);
-                        let interY = Math.round(sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 22);
-                        points.push({x: interX, y: interY});
-                    }
-                    points.push({x: Math.round(sx2), y: Math.round(sy2)});
-
-                    ctx.strokeStyle = '#e1bee7';
-                    ctx.lineWidth = 16;
-                    ctx.beginPath();
-                    ctx.moveTo(points[0].x, points[0].y);
-                    for (let p = 1; p < points.length; p++) {
-                        ctx.lineTo(points[p].x, points[p].y);
-                    }
-                    ctx.stroke();
-
-                    ctx.strokeStyle = '#7b1fa2';
-                    ctx.lineWidth = 8;
-                    ctx.beginPath();
-                    ctx.moveTo(points[0].x, points[0].y);
-                    for (let p = 1; p < points.length; p++) {
-                        ctx.lineTo(points[p].x, points[p].y);
-                    }
-                    ctx.stroke();
-
-                    ctx.strokeStyle = '#ce93d8';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(points[0].x, points[0].y);
-                    for (let p = 1; p < points.length; p++) {
-                        ctx.lineTo(points[p].x, points[p].y);
-                    }
-                    ctx.stroke();
                 }
+                // (註：閃電鏈 particle 已移至 enemies 繪製之前，確保不擋住角色與敵人)
             });
 
             floatTexts.forEach(ft => {
                 let screenX = ft.worldX - camX;
                 let screenY = ft.worldY - camY;
                 let alpha = Math.max(0, ft.life / ft.maxLife);
-                // 隨著生命週期（alpha 從 1 降到 0）動態縮放：從 1.0 倍逐漸縮小至消失時的 0.25 倍
                 let scale = 0.25 + 0.75 * alpha;
                 
                 ctx.save();
