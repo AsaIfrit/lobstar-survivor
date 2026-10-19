@@ -326,7 +326,6 @@
         }
 
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-        // 手機版鏡頭縮放改為 0.75，使人物與敵人縮小至原本的二分之一大小
         const cameraZoom = isMobile ? 0.75 : 2.0;
 
         if (isMobile) {
@@ -1147,9 +1146,20 @@
                     let e = enemies[j];
                     if (e.isDying) continue;
 
+                    // 確保這發火球在同一次飛行中，不會對同一個敵人重複造成傷害
+                    if (b.pierce && b.hitEnemies && b.hitEnemies.includes(e)) {
+                        continue;
+                    }
+
                     let hitRadius = b.radius + (b.isMaxLevel ? 10 : 0);
                     if (Math.hypot(b.x - e.x, b.y - e.y) < hitRadius + e.radius) {
                         playHitSound();
+
+                        // 記錄此敵人已被這顆火球擊中過
+                        if (b.pierce) {
+                            if (!b.hitEnemies) b.hitEnemies = [];
+                            b.hitEnemies.push(e);
+                        }
 
                         if (!e.hasBeenFireballKnockbacked) {
                             e.hasBeenFireballKnockbacked = true;
@@ -1454,6 +1464,7 @@
                             angle: angle,
                             color: '#ff7043',
                             pierce: true,
+                            hitEnemies: [], // 初始化穿透火球的已擊中名單
                             isMaxLevel: true
                         });
                     });
