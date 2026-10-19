@@ -847,8 +847,8 @@
                                 vx: (Math.random() - 0.5) * 1.5,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '雷霆導電!',
-                                color: '#00ffff',
+                                text: '感電', // 精簡為感電
+                                color: '#d1c4e9',
                                 life: 1.0,
                                 maxLife: 1.0
                             });
@@ -943,7 +943,7 @@
                                         vx: Math.cos(outAngle) * 1.8,
                                         vy: -3.0,
                                         gravity: 0.15,
-                                        text: isMaxBlade ? '極意蒸發 x4!' : '蒸發',
+                                        text: '蒸發', // 精簡為蒸發
                                         color: '#ff5722',
                                         life: 1.0,
                                         maxLife: 1.0
@@ -1023,7 +1023,7 @@
                             vx: Math.cos(outAngle) * 1.2,
                             vy: -2.2,
                             gravity: 0.15,
-                            text: isMaxFire ? `${burnDmg} (5x燃燒)` : burnDmg,
+                            text: burnDmg, // 燃燒跳字只顯示數值本身
                             color: '#ff7043',
                             life: 1.0,
                             maxLife: 1.0
@@ -1146,7 +1146,6 @@
                     let e = enemies[j];
                     if (e.isDying) continue;
 
-                    // 確保這發火球在同一次飛行中，不會對同一個敵人重複造成傷害
                     if (b.pierce && b.hitEnemies && b.hitEnemies.includes(e)) {
                         continue;
                     }
@@ -1155,7 +1154,6 @@
                     if (Math.hypot(b.x - e.x, b.y - e.y) < hitRadius + e.radius) {
                         playHitSound();
 
-                        // 記錄此敵人已被這顆火球擊中過
                         if (b.pierce) {
                             if (!b.hitEnemies) b.hitEnemies = [];
                             b.hitEnemies.push(e);
@@ -1198,7 +1196,7 @@
                                     vx: Math.cos(outAngle) * 1.8,
                                     vy: -3.0,
                                     gravity: 0.15,
-                                    text: b.isMaxLevel ? '極意蒸發 x4!' : '蒸發',
+                                    text: '蒸發', // 精簡為蒸發
                                     color: '#ff5722',
                                     life: 1.0,
                                     maxLife: 1.0
@@ -1216,7 +1214,7 @@
                                         vx: Math.cos(outAngle) * 1.2,
                                         vy: -2.5,
                                         gravity: 0.15,
-                                        text: '燃燒',
+                                        text: '燃燒', // 精簡為燃燒
                                         color: '#ff7043',
                                         life: 1.0,
                                         maxLife: 1.0
@@ -1464,7 +1462,7 @@
                             angle: angle,
                             color: '#ff7043',
                             pierce: true,
-                            hitEnemies: [], // 初始化穿透火球的已擊中名單
+                            hitEnemies: [],
                             isMaxLevel: true
                         });
                     });
@@ -1518,8 +1516,8 @@
                                 vx: Math.cos(outAngle) * 1.2,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '超載',
-                                color: '#ffca28',
+                                text: '超載', // 精簡為超載
+                                color: '#e1bee7',
                                 life: 1.0,
                                 maxLife: 1.0
                             });
@@ -1534,7 +1532,7 @@
                                     vx: Math.cos(pAngle) * pSpeed,
                                     vy: Math.sin(pAngle) * pSpeed,
                                     life: 0.5,
-                                    color: Math.random() > 0.4 ? '#ff5722' : (Math.random() > 0.5 ? '#ffeb3b' : '#ffffff'),
+                                    color: Math.random() > 0.4 ? '#ba68c8' : (Math.random() > 0.5 ? '#9c27b0' : '#ffffff'),
                                     size: 5 + Math.floor(Math.random() * 5)
                                 });
                             }
@@ -1546,7 +1544,7 @@
                                 radius: 10,
                                 expandSpeed: 6.0,
                                 life: 0.35,
-                                color: '#ffca28'
+                                color: '#ab47bc'
                             });
 
                             let overloadRadius = 100;
@@ -1578,7 +1576,7 @@
                                             vy: -2.2,
                                             gravity: 0.15,
                                             text: Math.floor(finalDmg * 0.75),
-                                            color: '#ffca28',
+                                            color: '#e1bee7',
                                             life: 1.0,
                                             maxLife: 1.0
                                         });
@@ -1596,8 +1594,8 @@
                                 vx: Math.cos(outAngle) * 1.2,
                                 vy: -2.5,
                                 gravity: 0.15,
-                                text: '感電',
-                                color: '#00b0ff',
+                                text: '感電', // 精簡為感電
+                                color: '#ba68c8',
                                 life: 1.0,
                                 maxLife: 1.0
                             });
@@ -1616,7 +1614,7 @@
                             vy: -2.5,
                             gravity: 0.15,
                             text: finalDmg,
-                            color: '#40c4ff',
+                            color: '#ce93d8',
                             life: 1.0,
                             maxLife: 1.0
                         });
@@ -1866,13 +1864,13 @@
                     }
 
                     if (e.stunTimer > 0) {
-                        ctx.strokeStyle = '#00ffff';
+                        ctx.strokeStyle = '#ba68c8';
                         ctx.lineWidth = 2;
                         let cageBox = size * 0.75;
                         ctx.strokeRect(screenX - cageBox, screenY - cageBox, cageBox * 2, cageBox * 2);
                         
                         let sparkTick = Math.floor(gameTime * 45) % 2;
-                        ctx.fillStyle = sparkTick === 0 ? '#ffffff' : '#00b0ff';
+                        ctx.fillStyle = sparkTick === 0 ? '#ffffff' : '#ba68c8';
                         ctx.fillRect(screenX - cageBox - 2, screenY - cageBox - 2, 4, 4);
                         ctx.fillRect(screenX + cageBox - 2, screenY - cageBox - 2, 4, 4);
                         ctx.fillRect(screenX - cageBox - 2, screenY + cageBox - 2, 4, 4);
@@ -1898,9 +1896,9 @@
 
                 let sparkFlash = Math.floor(gameTime * 35) % 2;
                 if (sparkFlash === 0) {
-                    ctx.fillStyle = '#00ffff';
+                    ctx.fillStyle = '#ba68c8';
                     ctx.fillRect(cx - 4, cy + 12, 8, 12);
-                    ctx.fillStyle = '#ffffff';
+                    ctx.fillStyle = '#e1bee7';
                     ctx.fillRect(cx - 2, cy + 14, 4, 8);
                 }
             });
@@ -2033,24 +2031,41 @@
                     let sx2 = p.targetX - camX;
                     let sy2 = p.targetY - camY;
 
-                    ctx.strokeStyle = '#00ffff';
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.moveTo(Math.round(sx1), Math.round(sy1));
-
                     let segments = 3;
+                    let points = [{x: Math.round(sx1), y: Math.round(sy1)}];
                     for (let s = 1; s < segments; s++) {
                         let t = s / segments;
                         let interX = Math.round(sx1 + (sx2 - sx1) * t + (Math.random() - 0.5) * 22);
                         let interY = Math.round(sy1 + (sy2 - sy1) * t + (Math.random() - 0.5) * 22);
-                        ctx.lineTo(interX, interY);
+                        points.push({x: interX, y: interY});
                     }
+                    points.push({x: Math.round(sx2), y: Math.round(sy2)});
 
-                    ctx.lineTo(Math.round(sx2), Math.round(sy2));
+                    ctx.strokeStyle = '#e1bee7';
+                    ctx.lineWidth = 16;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let p = 1; p < points.length; p++) {
+                        ctx.lineTo(points[p].x, points[p].y);
+                    }
                     ctx.stroke();
 
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#7b1fa2';
+                    ctx.lineWidth = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let p = 1; p < points.length; p++) {
+                        ctx.lineTo(points[p].x, points[p].y);
+                    }
+                    ctx.stroke();
+
+                    ctx.strokeStyle = '#ce93d8';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let p = 1; p < points.length; p++) {
+                        ctx.lineTo(points[p].x, points[p].y);
+                    }
                     ctx.stroke();
                 }
             });
@@ -2059,19 +2074,24 @@
                 let screenX = ft.worldX - camX;
                 let screenY = ft.worldY - camY;
                 let alpha = Math.max(0, ft.life / ft.maxLife);
+                // 隨著生命週期（alpha 從 1 降到 0）動態縮放：從 1.0 倍逐漸縮小至消失時的 0.25 倍
+                let scale = 0.25 + 0.75 * alpha;
                 
                 ctx.save();
                 ctx.globalAlpha = alpha;
+                ctx.translate(screenX, screenY);
+                ctx.scale(scale, scale);
+
                 ctx.font = 'bold 26px sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'alphabetic';
 
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 4;
-                ctx.strokeText(ft.text, screenX, screenY);
+                ctx.strokeText(ft.text, 0, 0);
 
                 ctx.fillStyle = ft.color;
-                ctx.fillText(ft.text, screenX, screenY);
+                ctx.fillText(ft.text, 0, 0);
                 ctx.restore();
             });
 
