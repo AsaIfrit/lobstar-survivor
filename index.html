@@ -636,7 +636,7 @@
 
                 if (weapon.id === 'lightning') {
                     let hasEnemyInRange = enemies.some(e => Math.hypot(player.worldX - e.x, player.worldY - e.y) <= weapon.range);
-                    if (!hasEnemyInRange && weapon.level < 4) return; // Lv.4 以上雷雲可獨立運作
+                    if (!hasEnemyInRange && weapon.level < 4) return;
                 }
 
                 weapon.timer += dt;
@@ -646,7 +646,7 @@
                 }
             });
 
-            // 雷雲（閃電鏈 Lv.4+）更新邏輯
+            // 雷雲（閃電鏈 Lv.4+）更新邏輯：同時對最多 3 個敵人造成傷害
             for (let i = activeClouds.length - 1; i >= 0; i--) {
                 let cloud = activeClouds[i];
                 cloud.life -= dt;
@@ -665,18 +665,24 @@
 
                 if (nearest) {
                     let cAngle = Math.atan2(nearest.y - cloud.y, nearest.x - cloud.x);
-                    cloud.x += Math.cos(cAngle) * 1.8;
-                    cloud.y += Math.sin(cAngle) * 1.8;
+                    cloud.x += Math.cos(cAngle) * 1.5;
+                    cloud.y += Math.sin(cAngle) * 1.5;
                 }
 
                 if (cloud.strikeTimer >= 0.6) {
                     cloud.strikeTimer = 0;
                     if (enemies.length > 0) {
-                        let targetEnemy = nearest || enemies[Math.floor(Math.random() * enemies.length)];
-                        if (targetEnemy && !targetEnemy.isDying) {
+                        // 挑選距離雲朵最近的最多 3 個敵人
+                        let sortedEnemies = [...enemies]
+                            .filter(e => !e.isDying && Math.hypot(cloud.x - e.x, cloud.y - e.y) < 250)
+                            .sort((a, b) => Math.hypot(cloud.x - a.x, cloud.y - a.y) - Math.hypot(cloud.x - b.x, cloud.y - b.y));
+
+                        let targetCount = Math.min(3, sortedEnemies.length);
+                        for (let t = 0; t < targetCount; t++) {
+                            let targetEnemy = sortedEnemies[t];
                             playHitSound();
                             let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
-                            let finalDmg = Math.floor(50 * powerBonus);
+                            let finalDmg = Math.floor(40 * powerBonus);
 
                             targetEnemy.wetTimer = 3.0;
                             targetEnemy.stunTimer = 2.0;
@@ -715,34 +721,37 @@
                 }
             }
 
-            // 防護水環更新（僅在 Lv.4+ 觸發水柱群與兩倍蒸發增幅）
+            // 防護水環更新（轉速調降、長水柱棒帶動態變形與軌跡水花）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let isMaxBlade = bladeW.level >= 4;
-                let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
-                let ringRadius = isMaxBlade ? 110 : 75;
+                let bladeCount = isMaxBlade ? 6 : (2 + bladeW.level);
+                let ringRadius = isMaxBlade ? 100 : 75;
+                // 轉速降低（原本 3 / 4.5 改為 1.8 / 2.6）
+                let rotationSpeed = isMaxBlade ? 2.6 : 1.8;
 
                 for (let i = 0; i < bladeCount; i++) {
-                    let angle = (gameTime * (isMaxBlade ? 4.5 : 3)) + (Math.PI * 2 / bladeCount) * i;
+                    let angle = (gameTime * rotationSpeed) + (Math.PI * 2 / bladeCount) * i;
                     let bx = player.worldX + Math.cos(angle) * ringRadius;
                     let by = player.worldY + Math.sin(angle) * ringRadius;
 
-                    if (Math.random() < (isMaxBlade ? 0.7 : 0.4)) {
+                    if (Math.random() < 0.5) {
                         particles.push({
                             type: 'smoke',
                             worldX: bx + (Math.random() - 0.5) * 12,
                             worldY: by + (Math.random() - 0.5) * 12,
-                            vx: isMaxBlade ? Math.cos(angle) * 3 : (Math.random() - 0.5) * 1.5,
-                            vy: isMaxBlade ? Math.sin(angle) * 3 : (Math.random() - 0.5) * 1.5,
+                            vx: (Math.random() - 0.5) * 1.5,
+                            vy: (Math.random() - 0.5) * 1.5,
                             life: 0.4,
                             color: '#29b6f6',
-                            size: isMaxBlade ? 4 : 2 + Math.floor(Math.random() * 2)
+                            size: 2 + Math.floor(Math.random() * 2)
                         });
                     }
 
                     enemies.forEach(e => {
                         if (e.isDying) return;
-                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + (isMaxBlade ? 25 : 15)) {
+                        let hitDist = isMaxBlade ? 30 : 15;
+                        if (Math.hypot(bx - e.x, by - e.y) < e.radius + hitDist) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
                                 playHitSound();
@@ -759,7 +768,6 @@
 
                                 if (e.burnTimer > 0) {
                                     e.burnTimer = 0;
-                                    // Lv.4+ 水環蒸發傷害額外提升兩倍（原本 2 倍變 4 倍）
                                     let evapMultiplier = isMaxBlade ? 4 : 2;
                                     finalDmg *= evapMultiplier;
 
@@ -848,7 +856,6 @@
                         playHitSound();
                         let fireballW = weapons.find(w => w.id === 'fireball');
                         let isMaxFire = fireballW && fireballW.level >= 4;
-                        // Lv.4+ 火球燃燒傷害變成 5 倍
                         let burnBaseDmg = Math.max(1, Math.floor(e.maxHp * 0.02));
                         let burnDmg = isMaxFire ? burnBaseDmg * 5 : burnBaseDmg;
 
@@ -951,7 +958,7 @@
 
             checkEnemyDeaths();
 
-            // 子彈更新（僅在 Lv.4+ 觸發 2 倍大火球與強效擊退）
+            // 子彈更新
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -1249,28 +1256,51 @@
 
             if (!target) return;
 
+            // 烈焰彈升級處理（Lv.4+ 扇形發射 5 顆大火球）
             if (weapon.id === 'fireball') {
                 player.isAttacking = true;
                 player.atkTimer = 0.25;
 
                 let isMaxFire = weapon.level >= 4;
-                let angle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
-                let count = weapon.level >= 3 ? 2 : 1;
-                for (let i = 0; i < count; i++) {
-                    let offsetAngle = angle + (i === 0 ? 0 : (i % 2 === 0 ? 0.2 : -0.2));
-                    bullets.push({
-                        id: 'fireball',
-                        x: player.worldX,
-                        y: player.worldY,
-                        vx: Math.cos(offsetAngle) * 6,
-                        vy: Math.sin(offsetAngle) * 6,
-                        damage: weapon.damage + weapon.level * 8,
-                        radius: isMaxFire ? 20 : 10,
-                        life: 2.0,
-                        color: '#ff7043',
-                        pierce: false,
-                        isMaxLevel: isMaxFire
+                let baseAngle = Math.atan2(target.y - player.worldY, target.x - player.worldX);
+                
+                if (isMaxFire) {
+                    // 扇形發射 5 顆大火球
+                    let spreadAngles = [-0.4, -0.2, 0, 0.2, 0.4];
+                    spreadAngles.forEach(offset => {
+                        let angle = baseAngle + offset;
+                        bullets.push({
+                            id: 'fireball',
+                            x: player.worldX,
+                            y: player.worldY,
+                            vx: Math.cos(angle) * 6,
+                            vy: Math.sin(angle) * 6,
+                            damage: weapon.damage + weapon.level * 8,
+                            radius: 20,
+                            life: 2.0,
+                            color: '#ff7043',
+                            pierce: false,
+                            isMaxLevel: true
+                        });
                     });
+                } else {
+                    let count = weapon.level >= 3 ? 2 : 1;
+                    for (let i = 0; i < count; i++) {
+                        let offsetAngle = baseAngle + (i === 0 ? 0 : (i % 2 === 0 ? 0.2 : -0.2));
+                        bullets.push({
+                            id: 'fireball',
+                            x: player.worldX,
+                            y: player.worldY,
+                            vx: Math.cos(offsetAngle) * 6,
+                            vy: Math.sin(offsetAngle) * 6,
+                            damage: weapon.damage + weapon.level * 8,
+                            radius: 10,
+                            life: 2.0,
+                            color: '#ff7043',
+                            pierce: false,
+                            isMaxLevel: false
+                        });
+                    }
                 }
             } else if (weapon.id === 'lightning') {
                 let affectedCount = 2 + weapon.level;
@@ -1612,18 +1642,23 @@
                 }
             });
 
-            // 渲染雷雲（Lv.4+ 閃電鏈）
+            // 渲染精細雲朵外型（Lv.4+ 雷雲）
             activeClouds.forEach(cloud => {
                 let cx = cloud.x - camX;
                 let cy = cloud.y - camY;
-                ctx.fillStyle = 'rgba(60, 60, 80, 0.85)';
-                ctx.fillRect(cx - 30, cy - 15, 60, 30);
-                ctx.fillStyle = '#b0bec5';
-                ctx.fillRect(cx - 20, cy - 22, 40, 20);
-                ctx.fillStyle = '#00ffff';
+                ctx.fillStyle = 'rgba(40, 40, 55, 0.9)';
+                ctx.fillRect(cx - 24, cy - 8, 48, 16);
+                ctx.fillRect(cx - 16, cy - 16, 32, 12);
+                ctx.fillStyle = '#90a4ae';
+                ctx.fillRect(cx - 20, cy - 12, 40, 14);
+                ctx.fillRect(cx - 12, cy - 20, 24, 12);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(cx - 8, cy - 16, 12, 6);
+
                 let sparkFlash = Math.floor(gameTime * 30) % 2;
                 if (sparkFlash === 0) {
-                    ctx.fillRect(cx - 6, cy + 10, 12, 10);
+                    ctx.fillStyle = '#00ffff';
+                    ctx.fillRect(cx - 4, cy + 8, 8, 12);
                 }
             });
 
@@ -1698,22 +1733,38 @@
                 ctx.fillText(player.currentSkillName, playerScreenX, boxY + boxHeight / 2);
             }
 
+            // 渲染防護水環（Lv.4+ 轉變成向外延伸的「旋轉長水柱棒」並帶有動態變形）
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let isMaxBlade = bladeW.level >= 4;
-                let bladeCount = isMaxBlade ? 8 : (2 + bladeW.level);
-                let ringRadius = isMaxBlade ? 110 : 75;
+                let bladeCount = isMaxBlade ? 6 : (2 + bladeW.level);
+                let ringRadius = isMaxBlade ? 100 : 75;
+                let rotationSpeed = isMaxBlade ? 2.6 : 1.8;
 
                 for (let i = 0; i < bladeCount; i++) {
-                    let angle = (gameTime * (isMaxBlade ? 4.5 : 3)) + (Math.PI * 2 / bladeCount) * i;
+                    let angle = (gameTime * rotationSpeed) + (Math.PI * 2 / bladeCount) * i;
                     let bx = playerScreenX + Math.cos(angle) * ringRadius;
                     let by = playerScreenY + Math.sin(angle) * ringRadius;
                     
-                    ctx.fillStyle = '#29b6f6';
-                    ctx.fillRect(bx - (isMaxBlade ? 10 : 8), by - (isMaxBlade ? 10 : 8), isMaxBlade ? 20 : 16, isMaxBlade ? 20 : 16);
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeRect(bx - (isMaxBlade ? 10 : 8), by - (isMaxBlade ? 10 : 8), isMaxBlade ? 20 : 16, isMaxBlade ? 20 : 16);
+                    if (isMaxBlade) {
+                        ctx.save();
+                        ctx.translate(bx, by);
+                        ctx.rotate(angle + Math.sin(gameTime * 4) * 0.2); // 旋轉時微幅動態變形
+                        ctx.fillStyle = '#29b6f6';
+                        ctx.fillRect(-14, -6, 28, 12);
+                        ctx.fillStyle = '#b3e5fc';
+                        ctx.fillRect(-10, -4, 20, 8);
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(-14, -6, 28, 12);
+                        ctx.restore();
+                    } else {
+                        ctx.fillStyle = '#29b6f6';
+                        ctx.fillRect(bx - 8, by - 8, 16, 16);
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(bx - 8, by - 8, 16, 16);
+                    }
                 }
             }
 
