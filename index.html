@@ -787,12 +787,12 @@
                 }
             }
 
-            // 防護水環更新
+            // 防護水環更新 (水柱更靠近主角：半徑改為 55)
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let isMaxBlade = bladeW.level >= 4;
                 let bladeCount = isMaxBlade ? 6 : (2 + bladeW.level);
-                let ringRadius = isMaxBlade ? 110 : 75;
+                let ringRadius = isMaxBlade ? 55 : 75;
                 let rotationSpeed = isMaxBlade ? 1.3 : 1.8;
 
                 for (let i = 0; i < bladeCount; i++) {
@@ -1335,7 +1335,7 @@
                             damage: weapon.damage + weapon.level * 8,
                             radius: 20,
                             life: 2.0,
-                            angle: angle, // 用於決定圖片面向
+                            angle: angle,
                             color: '#ff7043',
                             pierce: true,
                             isMaxLevel: true
@@ -1805,15 +1805,14 @@
                 ctx.fillText(player.currentSkillName, playerScreenX, boxY + boxHeight / 2);
             }
 
-            // 防護水環 / 水柱 渲染 (每0.2秒切換一格動畫)
+            // 防護水環 / 水柱 渲染
             let bladeW = weapons.find(w => w.id === 'blade');
             if (bladeW && bladeW.level > 0) {
                 let isMaxBlade = bladeW.level >= 4;
                 let bladeCount = isMaxBlade ? 6 : (2 + bladeW.level);
-                let ringRadius = isMaxBlade ? 110 : 75;
+                let ringRadius = isMaxBlade ? 55 : 75; // 水柱更靠近主角
                 let rotationSpeed = isMaxBlade ? 1.3 : 1.8;
 
-                // 0.2秒切換一格
                 let waterAnimIndex = Math.floor(gameTime / 0.2);
 
                 for (let i = 0; i < bladeCount; i++) {
@@ -1822,24 +1821,21 @@
                     let by = playerScreenY + Math.sin(angle) * ringRadius;
                     
                     if (isMaxBlade) {
-                        // 水柱 (Lv.4+)：使用 waterbat 圖片，每0.2秒一格循環 (2張圖)，圖片上方視為噴射前方
                         let batImg = waterbatImages[waterAnimIndex % waterbatImages.length];
                         ctx.save();
                         ctx.translate(bx, by);
-                        // 圖片上方為前方，因此額外加上 Math.PI / 2 調整方向
                         ctx.rotate(angle + Math.PI / 2 + Math.sin(gameTime * 3) * 0.15);
 
                         if (batImg && batImg.complete && batImg.naturalWidth !== 0) {
-                            let drawW = 56; // 寬度約2倍
-                            let drawH = 84; // 長度約3倍
+                            let drawW = 56 * 2;   // 寬度2倍
+                            let drawH = 84 * 1.5; // 長度1.5倍
                             ctx.drawImage(batImg, -drawW / 2, -drawH / 2, drawW, drawH);
                         } else {
                             ctx.fillStyle = '#29b6f6';
-                            ctx.fillRect(-12, -42, 24, 84);
+                            ctx.fillRect(-24, -63, 48, 126);
                         }
                         ctx.restore();
                     } else {
-                        // 普通水球 (Lv.1~3)：使用 waterball 圖片，每0.2秒一格循環 (4張圖)
                         let ballImg = waterballImages[waterAnimIndex % waterballImages.length];
                         if (ballImg && ballImg.complete && ballImg.naturalWidth !== 0) {
                             let drawSize = 32;
@@ -1852,7 +1848,7 @@
                 }
             }
 
-            // 烈焰彈渲染 (每0.2秒切換一格動畫，圖片下方為前方)
+            // 烈焰彈渲染 (每0.2秒切換一格動畫，圖片上方為前方)
             let fireballAnimIndex = Math.floor(gameTime / 0.2);
             bullets.forEach(b => {
                 let screenX = b.x - camX;
@@ -1861,8 +1857,7 @@
 
                 ctx.save();
                 ctx.translate(screenX, screenY);
-                // 圖片下方為飛行前方，因此加上 Math.PI / 2 讓圖片底部朝向飛行方向
-                ctx.rotate((b.angle || 0) + Math.PI / 2);
+                ctx.rotate(b.angle || 0);
 
                 let renderSize = b.isMaxLevel ? 48 : 28;
                 if (fbImg && fbImg.complete && fbImg.naturalWidth !== 0) {
