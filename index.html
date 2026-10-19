@@ -400,7 +400,7 @@
         const expImage03 = new Image();
         expImage03.src = 'exp_03.png';
 
-        // 敵人圖片預載入 (黃、紅、紫各兩張狀態)
+        // 敵人圖片預載入 (黃, 紅, 紫各兩張狀態)
         const enemyImg01_01 = new Image(); enemyImg01_01.src = 'enemy01_01.png';
         const enemyImg01_02 = new Image(); enemyImg01_02.src = 'enemy01_02.png';
         const enemyImg02_01 = new Image(); enemyImg02_01.src = 'enemy02_01.png';
@@ -887,7 +887,7 @@
                         let targetCount = Math.min(3, sortedEnemies.length);
                         for (let t = 0; t < targetCount; t++) {
                             let targetEnemy = sortedEnemies[t];
-                            playBzSound(); // 烏雲造成傷害播放 bz.mp3
+                            playBzSound();
                             let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                             let finalDmg = Math.floor(40 * powerBonus);
 
@@ -959,7 +959,7 @@
                         if (Math.hypot(bx - e.x, by - e.y) < e.radius + hitDist) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
-                                playPopSound(); // 水球泡泡擊中敵人播放 pop.mp3
+                                playPopSound();
 
                                 e.wetTimer = 3.0;
 
@@ -1354,7 +1354,7 @@
                     g.y += Math.sin(angle) * 12;
 
                     if (dist < player.radius + 15) {
-                        playEatSound(); // 吃到經驗寶石播放 eat.mp3
+                        playEatSound();
                         addExp(g.value);
                         gems.splice(i, 1);
                     }
@@ -1370,7 +1370,7 @@
                     it.y += Math.sin(angle) * 14;
 
                     if (dist < player.radius + 15) {
-                        playEatSound(); // 吃到道具播放 eat.mp3
+                        playEatSound();
                         applyItemEffect(it.type);
                         items.splice(i, 1);
                     }
@@ -1506,7 +1506,7 @@
                     life: 5.0,
                     strikeTimer: 0
                 });
-                player.currentSkillName = '雷雲降臨 Lv.4';
+                player.currentSkillName = '召喚雷雲'; // 改為 "召喚雷雲"
                 player.skillNameTimer = 0.8;
                 return;
             }
@@ -1570,7 +1570,7 @@
                     if (e.isDying) return;
                     let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                     if (hitCount < affectedCount && dist < weapon.range) {
-                        playBzSound(); // 閃電造成傷害播放 bz.mp3
+                        playBzSound();
 
                         let pushAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
                         e.x += Math.cos(pushAngle) * 8;
