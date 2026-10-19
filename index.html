@@ -827,14 +827,15 @@
                                 let baseDmg = (bladeW.damage + bladeW.level * (isMaxBlade ? 12 : 4)) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
 
-                                // 水柱 (Lv.4+) 擊飛效果：敵人向外飛起，滯空 2 秒，且對同一個敵人只觸發一次
+                                // 水柱 (Lv.4+) 擊飛與滯空效果：擊飛距離調整為兩個主角寬度 (~128px)，滯空 2 秒
                                 if (isMaxBlade && !e.hasBeenWaterBatLaunched) {
                                     e.hasBeenWaterBatLaunched = true;
                                     let launchAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
                                     e.isWaterBatFlying = true;
                                     e.waterBatFlyProgress = 0;
-                                    e.waterBatVx = Math.cos(launchAngle) * 7.5;
-                                    e.waterBatVy = Math.sin(launchAngle) * 7.5;
+                                    // 2秒內移動約 128 像素的總位移量 (速度設為 1.6)
+                                    e.waterBatVx = Math.cos(launchAngle) * 1.6;
+                                    e.waterBatVy = Math.sin(launchAngle) * 1.6;
                                 }
 
                                 if (e.burnTimer > 0) {
@@ -865,7 +866,7 @@
                                         text: isMaxBlade ? '極意蒸發 x4!' : '蒸發',
                                         color: '#ff5722',
                                         life: 1.0,
-                                           maxLife: 1.0
+                                        maxLife: 1.0
                                     });
                                 }
 
@@ -953,9 +954,9 @@
                 if (e.wetTimer > 0) e.wetTimer -= dt;
                 if (e.stunTimer > 0) e.stunTimer -= dt;
 
-                // 水柱擊飛與滯空處理 (滯空時間 2 秒)
+                // 水柱擊飛與滯空處理 (2秒滯空)
                 if (e.isWaterBatFlying) {
-                    e.waterBatFlyProgress += dt / 2.0; // 2秒完成
+                    e.waterBatFlyProgress += dt / 2.0;
                     e.x += e.waterBatVx;
                     e.y += e.waterBatVy;
                     e.visualHeight = Math.sin(e.waterBatFlyProgress * Math.PI) * 45;
@@ -1879,7 +1880,7 @@
                 ctx.fillText(player.currentSkillName, playerScreenX, boxY + boxHeight / 2);
             }
 
-            // 烈焰彈渲染 (每0.2秒切換一格動畫，圖片底部為前方朝向外發射)
+            // 烈焰彈渲染 (每0.2秒切換一格動畫，圖片底部黃色處朝向敵人發射)
             let fireballAnimIndex = Math.floor(gameTime / 0.2);
             bullets.forEach(b => {
                 let screenX = b.x - camX;
@@ -1888,7 +1889,8 @@
 
                 ctx.save();
                 ctx.translate(screenX, screenY);
-                ctx.rotate((b.angle || 0) + Math.PI);
+                // 調整旋轉角度，讓底部（黃色處）接觸到敵人的方向 (b.angle)
+                ctx.rotate((b.angle || 0) - Math.PI / 2);
 
                 let renderSize = b.isMaxLevel ? 48 : 28;
                 if (fbImg && fbImg.complete && fbImg.naturalWidth !== 0) {
