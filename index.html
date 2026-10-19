@@ -258,15 +258,15 @@
         <p>請挑選一項你要帶入戰場的核心武器：</p>
         <div class="upgrade-grid">
             <div class="upgrade-card" onclick="startWithSkill('fireball')">
-                <h3>烈焰球</h3>
+                <h3>火花</h3>
                 <p>射出火球攻擊敵人，並附加「燃燒」持續傷害狀態。</p>
             </div>
             <div class="upgrade-card" onclick="startWithSkill('blade')">
-                <h3>防護水環</h3>
+                <h3>水球泡泡</h3>
                 <p>環繞身周旋轉水球，附加「潮濕」減速狀態，可與火系觸發蒸發。</p>
             </div>
             <div class="upgrade-card" onclick="startWithSkill('lightning')">
-                <h3>閃電鏈</h3>
+                <h3>閃電</h3>
                 <p>釋放像素鋸齒閃電攻擊多重敵人，可與燃燒觸發「超載」、與潮濕觸發「感電」。</p>
             </div>
         </div>
@@ -301,6 +301,15 @@
         const hitSound = new Audio('HIT.mp3');
         hitSound.volume = 0.6;
 
+        const eatSound = new Audio('eat.mp3');
+        eatSound.volume = 0.6;
+
+        const popSound = new Audio('pop.mp3');
+        popSound.volume = 0.6;
+
+        const bzSound = new Audio('bz.mp3');
+        bzSound.volume = 0.6;
+
         const bgm = new Audio('Grassland.mp3');
         bgm.loop = true;
         bgm.volume = 0.4;
@@ -324,6 +333,27 @@
             try {
                 hitSound.currentTime = 0;
                 hitSound.play().catch(e => {});
+            } catch (err) {}
+        }
+
+        function playEatSound() {
+            try {
+                eatSound.currentTime = 0;
+                eatSound.play().catch(e => {});
+            } catch (err) {}
+        }
+
+        function playPopSound() {
+            try {
+                popSound.currentTime = 0;
+                popSound.play().catch(e => {});
+            } catch (err) {}
+        }
+
+        function playBzSound() {
+            try {
+                bzSound.currentTime = 0;
+                bzSound.play().catch(e => {});
             } catch (err) {}
         }
 
@@ -476,9 +506,9 @@
         };
 
         let weapons = [
-            { id: 'fireball', name: '烈焰球', level: 0, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
-            { id: 'lightning', name: '閃電鏈', level: 0, maxLevel: 5, cd: 2.0, timer: 0, damage: 40, range: 300 },
-            { id: 'blade', name: '防護水環', level: 0, maxLevel: 5, cd: 0.3, timer: 0, damage: 12, range: 120 }
+            { id: 'fireball', name: '火花', level: 0, maxLevel: 5, cd: 1.2, timer: 0, damage: 25, range: 250 },
+            { id: 'lightning', name: '閃電', level: 0, maxLevel: 5, cd: 2.0, timer: 0, damage: 40, range: 300 },
+            { id: 'blade', name: '水球泡泡', level: 0, maxLevel: 5, cd: 0.3, timer: 0, damage: 12, range: 120 }
         ];
 
         let passives = [
@@ -857,7 +887,7 @@
                         let targetCount = Math.min(3, sortedEnemies.length);
                         for (let t = 0; t < targetCount; t++) {
                             let targetEnemy = sortedEnemies[t];
-                            playHitSound();
+                            playBzSound(); // 烏雲造成傷害播放 bz.mp3
                             let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                             let finalDmg = Math.floor(40 * powerBonus);
 
@@ -929,7 +959,7 @@
                         if (Math.hypot(bx - e.x, by - e.y) < e.radius + hitDist) {
                             if (!e.lastBladeHit || gameTime - e.lastBladeHit > 0.25) {
                                 e.lastBladeHit = gameTime;
-                                playHitSound();
+                                playPopSound(); // 水球泡泡擊中敵人播放 pop.mp3
 
                                 e.wetTimer = 3.0;
 
@@ -1067,7 +1097,7 @@
                     e.x += e.waterBatVx;
                     e.y += e.waterBatVy;
                     e.visualHeight = Math.sin(e.waterBatFlyProgress * Math.PI) * 45;
-                    e.isJumping = true; // 飛行中視為跳躍/懸空狀態
+                    e.isJumping = true;
 
                     if (e.waterBatFlyProgress >= 1.0) {
                         e.isWaterBatFlying = false;
@@ -1115,7 +1145,7 @@
                     e.visualHeight = Math.sin(e.jumpProgress * Math.PI) * 20;
 
                     if (e.jumpProgress >= 1.0) {
-                        e.isJumping = false; // 落地回復成 _01
+                        e.isJumping = false;
                         e.visualHeight = 0;
                     }
                 } else {
@@ -1324,6 +1354,7 @@
                     g.y += Math.sin(angle) * 12;
 
                     if (dist < player.radius + 15) {
+                        playEatSound(); // 吃到經驗寶石播放 eat.mp3
                         addExp(g.value);
                         gems.splice(i, 1);
                     }
@@ -1339,6 +1370,7 @@
                     it.y += Math.sin(angle) * 14;
 
                     if (dist < player.radius + 15) {
+                        playEatSound(); // 吃到道具播放 eat.mp3
                         applyItemEffect(it.type);
                         items.splice(i, 1);
                     }
@@ -1538,7 +1570,7 @@
                     if (e.isDying) return;
                     let dist = Math.hypot(player.worldX - e.x, player.worldY - e.y);
                     if (hitCount < affectedCount && dist < weapon.range) {
-                        playHitSound();
+                        playBzSound(); // 閃電造成傷害播放 bz.mp3
 
                         let pushAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
                         e.x += Math.cos(pushAngle) * 8;
@@ -1954,7 +1986,6 @@
 
                     let size = e.radius * 1.8;
                     
-                    // 根據敵人類型與是否跳躍（isJumping）來切換對應圖片
                     let targetEnemyImg = null;
                     if (e.enemyType === 'yellow') {
                         targetEnemyImg = e.isJumping ? enemyImg01_02 : enemyImg01_01;
