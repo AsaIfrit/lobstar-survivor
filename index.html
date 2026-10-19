@@ -51,7 +51,11 @@
             border: 1px solid rgba(255,255,255,0.2);
             pointer-events: auto;
         }
-        .audio-btn {
+        .hud-stats.mobile-shrink {
+            font-size: 12px;
+            padding: 6px 10px;
+        }
+        .audio-btn, .pause-btn {
             background: rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255,255,255,0.4);
             color: white;
@@ -63,7 +67,12 @@
             margin-top: 6px;
             transition: background 0.2s;
         }
-        .audio-btn:hover {
+        .hud-stats.mobile-shrink .audio-btn, 
+        .hud-stats.mobile-shrink .pause-btn {
+            font-size: 10px;
+            padding: 4px 8px;
+        }
+        .audio-btn:hover, .pause-btn:hover {
             background: rgba(100, 100, 100, 0.8);
         }
         .exp-bar-container {
@@ -190,14 +199,15 @@
 
     <div id="ui-layer">
         <div class="hud-top">
-            <div class="hud-stats">
+            <div id="hudStatsLeft" class="hud-stats">
                 <div>生存時間: <span id="timeDisplay">00:00</span></div>
                 <div>擊殺數: <span id="killDisplay">0</span></div>
             </div>
-            <div class="hud-stats" style="text-align: right;">
+            <div id="hudStatsRight" class="hud-stats" style="text-align: right;">
                 <div>等級: <span id="levelDisplay">1</span></div>
                 <div>生命值: <span id="hpDisplay">100/100</span></div>
                 <button id="audioToggleBtn" class="audio-btn" onclick="toggleBackgroundAudio()">🎵 音樂: 開</button>
+                <button id="pauseBtn" class="pause-btn" onclick="togglePause()">⏸️ 暫停</button>
             </div>
         </div>
     </div>
@@ -224,7 +234,7 @@
             </div>
             <div class="upgrade-card" onclick="startWithSkill('lightning')">
                 <h3>閃電鏈</h3>
-                <p>釋放像素鋸齒閃電攻擊多重敵人，可與燃燒觸發「超載」、與潮濕觸發「感電」。</p>
+                <p>釋放像素鋸齒閃電攻擊多重敵人，可與燃燒觸發‘超載’、與潮濕觸發‘感電’。</p>
             </div>
         </div>
     </div>
@@ -285,9 +295,26 @@
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
         const cameraZoom = isMobile ? 1.0 : 2.0;
 
+        // 套用手機版 UI 縮小三分之一樣式
+        if (isMobile) {
+            document.getElementById('hudStatsLeft').classList.add('mobile-shrink');
+            document.getElementById('hudStatsRight').classList.add('mobile-shrink');
+        }
+
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            if (isMobile) {
+                // 手機版固定維持固定長宽比與解析度，避免畫面變形
+                canvas.width = 800;
+                canvas.height = 600;
+                canvas.style.width = '100vw';
+                canvas.style.height = '100vh';
+                canvas.style.objectFit = 'contain';
+            } else {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                canvas.style.width = '100vw';
+                canvas.style.height = '100vh';
+            }
             ctx.imageSmoothingEnabled = false;
         }
         window.addEventListener('resize', resizeCanvas);
@@ -301,13 +328,11 @@
         const cloudImage = new Image();
         cloudImage.src = 'cloud.png';
 
-        // 烈焰彈動畫素材 (Fireball_01, Fireball_02)
         const fireballImages = [
             (function() { let img = new Image(); img.src = 'Fireball_01.png'; return img; })(),
             (function() { let img = new Image(); img.src = 'Fireball_02.png'; return img; })()
         ];
 
-        // 防護水環水球動畫素材 (waterball_01, waterball_02, waterball_03, waterball_02)
         const waterballImages = [
             (function() { let img = new Image(); img.src = 'waterball_01.png'; return img; })(),
             (function() { let img = new Image(); img.src = 'waterball_02.png'; return img; })(),
@@ -315,7 +340,6 @@
             (function() { let img = new Image(); img.src = 'waterball_02.png'; return img; })()
         ];
 
-        // 水柱動畫素材 (waterbat_01, waterbat_02)
         const waterbatImages = [
             (function() { let img = new Image(); img.src = 'waterbat_01.png'; return img; })(),
             (function() { let img = new Image(); img.src = 'waterbat_02.png'; return img; })()
@@ -328,7 +352,6 @@
             playerIdleImages[index] = img;
         });
 
-        // 走路動畫素材 (walk_01 ~ walk_08)
         const walkSources = [
             'walk_01.png', 'walk_02.png', 'walk_03.png', 'walk_04.png',
             'walk_05.png', 'walk_06.png', 'walk_07.png', 'walk_08.png'
@@ -579,13 +602,13 @@
         }
 
         function renderTitleBackground() {
+            let currentWidth = isMobile ? 800 : (canvas.width / cameraZoom);
+            let currentHeight = isMobile ? 600 : (canvas.height / cameraZoom);
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.save();
             ctx.scale(cameraZoom, cameraZoom);
-
-            let scaledWidth = canvas.width / cameraZoom;
-            let scaledHeight = canvas.height / cameraZoom;
 
             titleCamX += 0.8;
             titleCamY -= 0.8;
@@ -594,10 +617,10 @@
             if (bgPattern) {
                 ctx.fillStyle = bgPattern;
                 ctx.translate(-titleCamX, -titleCamY);
-                ctx.fillRect(titleCamX, titleCamY, scaledWidth, scaledHeight);
+                ctx.fillRect(titleCamX, titleCamY, currentWidth, currentHeight);
             } else {
                 ctx.fillStyle = '#a8d5ba';
-                ctx.fillRect(0, 0, scaledWidth, scaledHeight);
+                ctx.fillRect(0, 0, currentWidth, currentHeight);
             }
             ctx.restore();
 
@@ -625,12 +648,12 @@
                     te.visualHeight = 0;
                 }
 
-                let screenX = (scaledWidth / 2) + te.x - titleCamX;
-                let screenY = ((scaledHeight / 2) + te.y) - titleCamY - te.visualHeight;
+                let screenX = (currentWidth / 2) + te.x - titleCamX;
+                let screenY = ((currentHeight / 2) + te.y) - titleCamY - te.visualHeight;
 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
                 ctx.beginPath();
-                ctx.ellipse((scaledWidth / 2) + te.x - titleCamX, (scaledHeight / 2) + te.y - titleCamY + te.radius * 0.5, te.radius * 0.8, te.radius * 0.35, 0, 0, Math.PI * 2);
+                ctx.ellipse((currentWidth / 2) + te.x - titleCamX, (currentHeight / 2) + te.y - titleCamY + te.radius * 0.5, te.radius * 0.8, te.radius * 0.35, 0, 0, Math.PI * 2);
                 ctx.fill();
 
                 let size = te.radius * 1.8;
@@ -703,16 +726,15 @@
                 moveY *= 0.7071;
             }
 
-            // 動畫幀更新
             if (player.isMoving) {
                 player.walkAnimTimer += dt;
-                if (player.walkAnimTimer >= 0.1) { // 每 0.1 秒切換一格走路動畫
+                if (player.walkAnimTimer >= 0.1) {
                     player.walkAnimTimer = 0;
                     player.currentWalkFrame = (player.currentWalkFrame + 1) % playerWalkImages.length;
                 }
             } else {
                 player.animTimer += dt;
-                if (player.animTimer >= 0.5) { // 待機每 0.5 秒切換
+                if (player.animTimer >= 0.5) {
                     player.animTimer = 0;
                     player.currentFrame = (player.currentFrame + 1) % 2;
                 }
@@ -856,13 +878,11 @@
                                 let baseDmg = (bladeW.damage + bladeW.level * (isMaxBlade ? 12 : 4)) * powerBonus;
                                 let finalDmg = Math.floor(baseDmg);
 
-                                // 水柱 (Lv.4+) 擊飛與滯空效果：滯空時間改為 1 秒
                                 if (isMaxBlade && !e.hasBeenWaterBatLaunched) {
                                     e.hasBeenWaterBatLaunched = true;
                                     let launchAngle = Math.atan2(e.y - player.worldY, e.x - player.worldX);
                                     e.isWaterBatFlying = true;
                                     e.waterBatFlyProgress = 0;
-                                    // 1秒內移動約 128 像素 (速度設為 3.2)
                                     e.waterBatVx = Math.cos(launchAngle) * 3.2;
                                     e.waterBatVy = Math.sin(launchAngle) * 3.2;
                                 }
@@ -983,9 +1003,8 @@
                 if (e.wetTimer > 0) e.wetTimer -= dt;
                 if (e.stunTimer > 0) e.stunTimer -= dt;
 
-                // 水柱擊飛與滯空處理 (1秒滯空)
                 if (e.isWaterBatFlying) {
-                    e.waterBatFlyProgress += dt / 1.0; // 1秒完成
+                    e.waterBatFlyProgress += dt / 1.0;
                     e.x += e.waterBatVx;
                     e.y += e.waterBatVy;
                     e.visualHeight = Math.sin(e.waterBatFlyProgress * Math.PI) * 45;
@@ -1100,10 +1119,14 @@
                     if (Math.hypot(b.x - e.x, b.y - e.y) < hitRadius + e.radius) {
                         playHitSound();
 
-                        let knockbackPower = b.isMaxLevel ? 22 : 10;
-                        let pushAngle = Math.atan2(e.y - b.y, e.x - b.x);
-                        e.x += Math.cos(pushAngle) * knockbackPower;
-                        e.y += Math.sin(pushAngle) * knockbackPower;
+                        // 火焰彈擊退效果對同一個敵人只造成一次
+                        if (!e.hasBeenFireballKnockbacked) {
+                            e.hasBeenFireballKnockbacked = true;
+                            let knockbackPower = b.isMaxLevel ? 22 : 10;
+                            let pushAngle = Math.atan2(e.y - b.y, e.x - b.x);
+                            e.x += Math.cos(pushAngle) * knockbackPower;
+                            e.y += Math.sin(pushAngle) * knockbackPower;
+                        }
 
                         let powerBonus = 1 + passives.find(p => p.id === 'power').level * 0.15;
                         let finalDmg = Math.floor(b.damage * powerBonus);
@@ -1282,7 +1305,9 @@
 
         function spawnEnemy() {
             let angle = Math.random() * Math.PI * 2;
-            let spawnDist = Math.max(canvas.width, canvas.height) * 0.5 + Math.random() * 150;
+            let currentWidth = isMobile ? 800 : (canvas.width / cameraZoom);
+            let currentHeight = isMobile ? 600 : (canvas.height / cameraZoom);
+            let spawnDist = Math.max(currentWidth, currentHeight) * 0.5 + Math.random() * 150;
             let x = player.worldX + Math.cos(angle) * spawnDist;
             let y = player.worldY + Math.sin(angle) * spawnDist;
 
@@ -1334,6 +1359,7 @@
                 waterBatVx: 0,
                 waterBatVy: 0,
                 hasBeenWaterBatLaunched: false,
+                hasBeenFireballKnockbacked: false,
                 isDying: false,
                 deathTimer: 0
             });
@@ -1650,8 +1676,8 @@
             ctx.save();
             ctx.scale(cameraZoom, cameraZoom);
 
-            let scaledWidth = canvas.width / cameraZoom;
-            let scaledHeight = canvas.height / cameraZoom;
+            let scaledWidth = isMobile ? 800 : (canvas.width / cameraZoom);
+            let scaledHeight = isMobile ? 600 : (canvas.height / cameraZoom);
             let camX = player.worldX - scaledWidth / 2;
             let camY = player.worldY - scaledHeight / 2;
 
@@ -1916,7 +1942,6 @@
                 ctx.fillText(player.currentSkillName, playerScreenX, boxY + boxHeight / 2);
             }
 
-            // 烈焰彈渲染 (每0.2秒切換一格動畫，圖片底部黃色處朝向敵人發射)
             let fireballAnimIndex = Math.floor(gameTime / 0.2);
             bullets.forEach(b => {
                 let screenX = b.x - camX;
