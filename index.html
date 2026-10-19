@@ -743,15 +743,22 @@
                 else if (te.type === 'red') targetImg = te.isJumping ? enemyImg02_02 : enemyImg02_01;
                 else if (te.type === 'purple') targetImg = te.isJumping ? enemyImg03_02 : enemyImg03_01;
 
+                ctx.save();
+                ctx.translate(screenX, screenY);
+                if (te.vx > 0) {
+                    ctx.scale(-1, 1); // 標題畫面預覽敵人向右移動時反轉
+                }
+
                 if (targetImg && targetImg.complete && targetImg.naturalWidth !== 0) {
-                    ctx.drawImage(targetImg, screenX - size / 2, screenY - size / 2, size, size);
+                    ctx.drawImage(targetImg, -size / 2, -size / 2, size, size);
                 } else {
                     ctx.fillStyle = te.color;
-                    ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
+                    ctx.fillRect(-size / 2, -size / 2, size, size);
                     ctx.strokeStyle = '#4a2e18';
                     ctx.lineWidth = 2;
-                    ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
+                    ctx.strokeRect(-size / 2, -size / 2, size, size);
                 }
+                ctx.restore();
             });
 
             ctx.restore();
@@ -1098,6 +1105,7 @@
                     e.y += e.waterBatVy;
                     e.visualHeight = Math.sin(e.waterBatFlyProgress * Math.PI) * 45;
                     e.isJumping = true;
+                    e.movingRight = e.waterBatVx > 0; // 記錄移動方向
 
                     if (e.waterBatFlyProgress >= 1.0) {
                         e.isWaterBatFlying = false;
@@ -1113,6 +1121,7 @@
                     e.y += e.knockbackVy;
                     e.visualHeight = Math.sin(e.knockbackJumpProgress * Math.PI) * 32;
                     e.isJumping = true;
+                    e.movingRight = e.knockbackVx > 0; // 記錄移動方向
 
                     if (e.knockbackJumpProgress >= 1.0) {
                         e.isKnockbackJumping = false;
@@ -1131,6 +1140,12 @@
                 let angle = Math.atan2(player.worldY - e.y, player.worldX - e.x);
                 let currentEnemySpeed = e.speed * (e.wetTimer > 0 ? 0.8 : 1.0);
 
+                let moveVx = Math.cos(angle) * currentEnemySpeed;
+                let moveVy = Math.sin(angle) * currentEnemySpeed;
+
+                // 根據朝向玩家的水平分量判斷是否往右移動
+                e.movingRight = moveVx > 0;
+
                 e.jumpTimer += dt;
                 if (e.jumpTimer >= 0.8) {
                     e.jumpTimer = 0;
@@ -1140,8 +1155,8 @@
 
                 if (e.isJumping) {
                     e.jumpProgress += dt * 2.8;
-                    e.x += Math.cos(angle) * currentEnemySpeed * 1.6;
-                    e.y += Math.sin(angle) * currentEnemySpeed * 1.6;
+                    e.x += moveVx * 1.6;
+                    e.y += moveVy * 1.6;
                     e.visualHeight = Math.sin(e.jumpProgress * Math.PI) * 20;
 
                     if (e.jumpProgress >= 1.0) {
@@ -1149,6 +1164,8 @@
                         e.visualHeight = 0;
                     }
                 } else {
+                    e.x += moveVx;
+                    e.y += moveVy;
                     e.visualHeight = 0;
                 }
 
@@ -1471,6 +1488,7 @@
                 waterBatFlyProgress: 0,
                 waterBatVx: 0,
                 waterBatVy: 0,
+                movingRight: false,
                 hasBeenWaterBatLaunched: false,
                 hasBeenFireballKnockbacked: false,
                 isDying: false,
@@ -1506,7 +1524,7 @@
                     life: 5.0,
                     strikeTimer: 0
                 });
-                player.currentSkillName = '召喚雷雲'; // 改為 "召喚雷雲"
+                player.currentSkillName = '召喚雷雲';
                 player.skillNameTimer = 0.8;
                 return;
             }
@@ -1995,15 +2013,22 @@
                         targetEnemyImg = e.isJumping ? enemyImg03_02 : enemyImg03_01;
                     }
 
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    if (e.movingRight) {
+                        ctx.scale(-1, 1); // 往右方移動時水平反轉圖片
+                    }
+
                     if (targetEnemyImg && targetEnemyImg.complete && targetEnemyImg.naturalWidth !== 0) {
-                        ctx.drawImage(targetEnemyImg, screenX - size / 2, screenY - size / 2, size, size);
+                        ctx.drawImage(targetEnemyImg, -size / 2, -size / 2, size, size);
                     } else {
                         ctx.fillStyle = e.color;
-                        ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
+                        ctx.fillRect(-size / 2, -size / 2, size, size);
                         ctx.strokeStyle = '#4a2e18';
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
+                        ctx.strokeRect(-size / 2, -size / 2, size, size);
                     }
+                    ctx.restore();
 
                     if (e.burnTimer > 0) {
                         let flamePulse = Math.sin(gameTime * 18) * 3;
