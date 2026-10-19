@@ -326,7 +326,8 @@
         }
 
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-        const cameraZoom = isMobile ? 1.5 : 2.0;
+        // 手機版鏡頭縮放改為 0.75，使人物與敵人縮小至原本的二分之一大小
+        const cameraZoom = isMobile ? 0.75 : 2.0;
 
         if (isMobile) {
             document.getElementById('hudStatsLeft').classList.add('mobile-shrink');
@@ -336,7 +337,6 @@
 
         function resizeCanvas() {
             if (isMobile) {
-                // 手機版動態適應全螢幕長寬，消除上下黑邊
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
                 canvas.style.width = '100vw';
